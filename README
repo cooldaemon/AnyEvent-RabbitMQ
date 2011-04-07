@@ -1,16 +1,16 @@
-This is Perl module Net::RabbitFoot.
+This is Perl module AnyEvent::RabbitMQ.
 
-Net::RabbitFoot is an AMQP(Advanced Message Queuing Protocol) client library, that is intended to allow you to interact with AMQP-compliant message brokers/servers such as RabbitMQ in an asynchronous fashion.
+AnyEvent::RabbitMQ is an AMQP(Advanced Message Queuing Protocol) client library, that is intended to allow you to interact with AMQP-compliant message brokers/servers such as RabbitMQ in an asynchronous fashion.
 
-You can use Net::RabbitFoot to -
+You can use AnyEvent::RabbitMQ to -
 
   * Declare and delete exchanges
   * Declare, delete, bind and unbind queues
   * Set QoS
-  * Publish, consume, get, ack and recover messages
+  * Publish, consume, get, ack, recover and reject messages
   * Select, commit and rollback transactions
 
-Net::RabbitFoot is known to work with RabbitMQ versions 2.3.1 and version 0-8 of the AMQP specification.
+AnyEvent::RabbitMQ is known to work with RabbitMQ versions 2.4.0 and version 0-8 of the AMQP specification.
 
 INSTALLATION
 
@@ -25,9 +25,9 @@ Then install it:
 
 DOCUMENTATION
 
-Net::RabbitFoot documentation is available as in POD. So you can do:
+AnyEvent::RabbitMQ documentation is available as in POD. So you can do:
 
-    % perldoc Net::RabbitFoot
+    % perldoc AnyEvent::RabbitMQ
 
 to read the documentation online with your favorite pager.
 

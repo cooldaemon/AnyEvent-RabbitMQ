@@ -1,9 +1,0 @@
-#!/usr/bin/env perl
-
-use strict;
-use warnings;
-
-use Net::RabbitFoot::Cmd;
-
-Net::RabbitFoot::Cmd->run;
-

@@ -2,26 +2,28 @@ use Test::More;
 use Test::Exception;
 
 use FindBin;
-use JSON::XS;
 use version;
 
-my $json_text;
 my %server = (
     product => undef,
     version => undef,
 );
-open my $fh, '<', $FindBin::Bin . '/../config.json' or die $!;
-{undef $/; $json_text = <$fh>;}
-close $fh;
-my $conf = decode_json($json_text);
+
+my %conf = (
+    host  => 'localhost',
+    port  => 5672,
+    user  => 'guest',
+    pass  => 'guest',
+    vhost => '/',
+);
 
 eval {
     use IO::Socket::INET;
 
     my $socket = IO::Socket::INET->new(
         Proto    => 'tcp',
-        PeerAddr => $conf->{host},
-        PeerPort => $conf->{port},
+        PeerAddr => $conf{host},
+        PeerPort => $conf{port},
         Timeout  => 1,
     ) or die 'Error connecting to AMQP Server!';
 
@@ -29,21 +31,20 @@ eval {
 };
 
 plan skip_all => 'Connection failure: '
-               . $conf->{host} . ':' . $conf->{port} if $@;
+               . $conf{host} . ':' . $conf{port} if $@;
 plan tests => 25;
 
-use Net::RabbitFoot ();
 use AnyEvent::RabbitMQ;
 
 my $ar = AnyEvent::RabbitMQ->new();
 
 lives_ok sub {
-    $ar->load_xml_spec(Net::RabbitFoot::default_amqp_spec())
+    $ar->load_xml_spec()
 }, 'load xml spec';
 
 my $done = AnyEvent->condvar;
 $ar->connect(
-    (map {$_ => $conf->{$_}} qw(host port user pass vhost)),
+    (map {$_ => $conf{$_}} qw(host port user pass vhost)),
     timeout    => 1,
     on_success => sub {
         my $ar = shift;

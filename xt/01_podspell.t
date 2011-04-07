@@ -8,7 +8,6 @@ all_pod_files_spelling_ok('lib');
 __DATA__
 Masahito Ikuta
 cooldaemon@gmail.com
-RabbitFoot
 AMQP
 RabbitMQ
 multi

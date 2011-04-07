@@ -4,8 +4,12 @@ use strict;
 use warnings;
 
 use Data::Dumper;
-use Carp qw/ confess /;
+use Carp qw(confess);
 use List::MoreUtils qw(none);
+use Devel::GlobalDestruction;
+use namespace::clean;
+use File::ShareDir;
+use Readonly;
 
 use AnyEvent::Handle;
 use AnyEvent::Socket;
@@ -16,10 +20,10 @@ use Net::AMQP::Common qw(:all);
 use AnyEvent::RabbitMQ::Channel;
 use AnyEvent::RabbitMQ::LocalQueue;
 
-use Devel::GlobalDestruction;
-use namespace::clean;
-
 our $VERSION = '1.03';
+
+Readonly my $DEFAULT_AMQP_SPEC
+    => File::ShareDir::dist_dir("AnyEvent-RabbitMQ") . '/fixed_amqp0-8.xml';
 
 sub new {
     my $class = shift;
@@ -52,7 +56,10 @@ sub login_user {
 
 sub load_xml_spec {
     my $self = shift;
-    Net::AMQP::Protocol->load_xml_spec(@_); # die when fail in this line.
+    my ($spec) = @_;
+    Net::AMQP::Protocol->load_xml_spec(
+        $spec || $DEFAULT_AMQP_SPEC
+    ); # die when fail in this line.
     return $self;
 }
 
@@ -566,10 +573,10 @@ You can use AnyEvent::RabbitMQ to -
   * Declare and delete exchanges
   * Declare, delete, bind and unbind queues
   * Set QoS
-  * Publish, consume, get, ack and recover messages
+  * Publish, consume, get, ack, recover and reject messages
   * Select, commit and rollback transactions
 
-AnyEvnet::RabbitMQ is known to work with RabbitMQ versions 2.3.1 and version 0-8 of the AMQP specification.
+AnyEvnet::RabbitMQ is known to work with RabbitMQ versions 2.4.0 and version 0-8 of the AMQP specification.
 
 =head1 AUTHOR
 
