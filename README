@@ -10,7 +10,7 @@ You can use AnyEvent::RabbitMQ to -
   * Publish, consume, get, ack, recover and reject messages
   * Select, commit and rollback transactions
 
-AnyEvent::RabbitMQ is known to work with RabbitMQ versions 2.4.0 and version 0-8 of the AMQP specification.
+AnyEvent::RabbitMQ is known to work with RabbitMQ versions 2.5.1 and version 0-8 of the AMQP specification.
 
 INSTALLATION
 

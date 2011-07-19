@@ -20,7 +20,7 @@ use Net::AMQP::Common qw(:all);
 use AnyEvent::RabbitMQ::Channel;
 use AnyEvent::RabbitMQ::LocalQueue;
 
-our $VERSION = '1.03';
+our $VERSION = '1.04';
 
 Readonly my $DEFAULT_AMQP_SPEC
     => File::ShareDir::dist_dir("AnyEvent-RabbitMQ") . '/fixed_amqp0-8.xml';
@@ -574,7 +574,7 @@ You can use AnyEvent::RabbitMQ to -
   * Publish, consume, get, ack, recover and reject messages
   * Select, commit and rollback transactions
 
-AnyEvnet::RabbitMQ is known to work with RabbitMQ versions 2.4.0 and version 0-8 of the AMQP specification.
+AnyEvnet::RabbitMQ is known to work with RabbitMQ versions 2.5.1 and version 0-8 of the AMQP specification.
 
 =head1 AUTHOR
 

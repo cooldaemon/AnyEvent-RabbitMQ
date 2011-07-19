@@ -32,7 +32,7 @@ eval {
 
 plan skip_all => 'Connection failure: '
                . $conf{host} . ':' . $conf{port} if $@;
-plan tests => 25;
+plan tests => 31;
 
 use AnyEvent::RabbitMQ;
 
@@ -166,6 +166,10 @@ $ch->get(
     on_failure => failure_cb($done),
 );
 $done->recv;
+
+for my $size (10, 131_064, 200_000, 10, 999_999, 10) {
+    send_large_size_message($ch, $size);
+}
 
 $done = AnyEvent->condvar;
 $ch->consume(
@@ -319,7 +323,7 @@ SKIP: {
         },
         on_failure => failure_cb($done),
     );
-    publish( $ch, 'RabbitMQ is powerful.', $done, );
+    publish($ch, 'RabbitMQ is powerful.', $done,);
     $done->recv;
     pass('reject');
 };
@@ -431,3 +435,22 @@ sub publish {
     return;
 }
  
+sub send_large_size_message {
+    my ($ch, $size,) = @_;
+
+    my $done = AnyEvent->condvar;
+    publish($ch, 'a' x $size, $done,);
+    $ch->get(
+        queue      => 'test_q',
+        on_success => sub {
+            my $response = shift;
+            is(length($response->{body}->payload), $size, 'get large size');
+            $done->send;
+        },
+        on_failure => failure_cb($done),
+    );
+    $done->recv;
+
+    return;
+}
+
