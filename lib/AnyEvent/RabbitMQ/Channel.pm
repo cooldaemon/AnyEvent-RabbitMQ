@@ -773,6 +773,8 @@ The name of the exchange to bind
 
 The routing key to bind with
 
+=back
+
 =head2 unbind_queue
 
 =head2 purge_queue
@@ -842,6 +844,8 @@ consumed after the on_success callback has been called.
 
 Arguments:
 
+=over
+
 =item consumer_tag
 
 Identifies this consumer, needs to be the value supplied when the queue is initially
@@ -854,6 +858,8 @@ Callback called if the subscription was successfully cancelled.
 =item on_failure
 
 Callback called if the subscription could not be cancelled for any reason.
+
+=back
 
 =head2 get
 
