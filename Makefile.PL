@@ -9,7 +9,7 @@ requires 'AnyEvent';
 requires 'Devel::GlobalDestruction';
 requires 'namespace::clean';
 requires 'File::ShareDir';
-requires 'Readonly';
+requires 'Readonly' => '1.03';
 
 tests 't/*.t';
 author_tests 'xt';

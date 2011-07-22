@@ -1,5 +1,8 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+1.05    Tue Jul 22 16:55:55 2011
+        - Fixed a compiling error.
+
 1.04    Tue Jul 19 17:04:24 2011
         - Bug fix for consuming large messages.
 
