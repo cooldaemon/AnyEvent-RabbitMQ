@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 use Data::Dumper;
-use Carp qw(confess);
+use Carp qw(confess croak);
 use List::MoreUtils qw(none);
 use Devel::GlobalDestruction;
 use namespace::clean;
@@ -54,12 +54,17 @@ sub login_user {
     return $self->{_login_user};
 }
 
+my $_loaded_spec;
 sub load_xml_spec {
     my $self = shift;
     my ($spec) = @_;
-    Net::AMQP::Protocol->load_xml_spec(
-        $spec || $DEFAULT_AMQP_SPEC
-    ); # die when fail in this line.
+    $spec ||= $DEFAULT_AMQP_SPEC;
+    if ($_loaded_spec && $_loaded_spec ne $spec) {
+        croak("Tried to load AMQP spec $spec, but have already loaded $_loaded_spec, not possible");
+    }
+    elsif (!$_loaded_spec) {
+        Net::AMQP::Protocol->load_xml_spec($_loaded_spec = $spec);
+    }
     return $self;
 }
 
