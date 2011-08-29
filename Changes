@@ -1,5 +1,8 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Allow multiple clients to have independent connections
+          to RabbitMQ, as long as they all use the same spec file.
+
 1.05    Tue Jul 22 16:55:55 2011
         - Fixed a compiling error.
 
