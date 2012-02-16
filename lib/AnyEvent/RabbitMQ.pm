@@ -188,11 +188,10 @@ sub _check_close_and_clean {
     my ($frame, $close_cb,) = @_;
 
     return 1 if !$frame->isa('Net::AMQP::Frame::Method');
-
     my $method_frame = $frame->method_frame;
-    return 1 if !$method_frame->isa('Net::AMQP::Protocol::Connection::Close');
-
-    $self->_push_write(Net::AMQP::Protocol::Connection::CloseOk->new());
+    return 1 if !$method_frame->isa('Net::AMQP::Protocol::Connection::Close') && !$method_frame->isa('Net::AMQP::Protocol::Connection::CloseOk');
+    $self->_push_write(Net::AMQP::Protocol::Connection::CloseOk->new())
+        if $method_frame->isa('Net::AMQP::Protocol::Connection::Close');
     $self->{_channels} = {};
     $self->{_is_open} = 0;
     $self->_disconnect();
