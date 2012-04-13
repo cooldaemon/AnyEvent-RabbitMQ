@@ -42,7 +42,9 @@ sub open {
             $self->{_is_active} = 1;
             $args{on_success}->();
         },
-        $args{on_failure},
+        sub {
+            $args{on_failure}->(@_);
+        },
         $self->{id},
     );
 
@@ -55,7 +57,16 @@ sub close {
         or return;
     my %args = $connection->_set_cbs(@_);
 
-    return $self if !$self->{_is_open};
+    # Ensure to remove this channel from the connection even if we're not
+    # fully open to ensure $rf->close works always.
+    # FIXME - We can end up racing here so the server thinks the channel is
+    # open, but we've closed it - a more elegant fix would be to mark that
+    # the channel is opening, and wait for it to open before closing it
+    if (!$self->{_is_open}) {
+        $self->{connection}->delete_channel($self->{id});
+        $args{on_success}->($self);
+        return $self;
+    }
 
     my %cbs = %{ $self->{_consumer_cbs} };
     return $self->_close(%args) unless %cbs;
@@ -657,6 +668,7 @@ sub _push_read_header_and_body {
             $self->{_content_queue}->get($next_frame);
         }
         else {
+            undef $next_frame;
             $frame->payload($body_payload);
             $response->{body} = $frame;
             $cb->($response);
