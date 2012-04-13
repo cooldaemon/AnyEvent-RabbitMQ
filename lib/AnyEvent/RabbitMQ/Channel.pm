@@ -57,16 +57,19 @@ sub close {
 
     return $self if !$self->{_is_open};
 
-    return $self->_close(%args) if 0 == scalar keys %{$self->{_consumer_cbs}};
+    my %cbs = %{ $self->{_consumer_cbs} };
+    return $self->_close(%args) unless %cbs;
 
-    for my $consumer_tag (keys %{$self->{_consumer_cbs}}) {
+    for my $consumer_tag ( keys %cbs ) {
         $self->cancel(
             consumer_tag => $consumer_tag,
             on_success   => sub {
-                $self->_close(%args);
+                delete $cbs{$consumer_tag};
+                $self->_close(%args) unless %cbs;
             },
-            on_failure   => sub {
-                $self->_close(%args);
+            on_failure => sub {
+                delete $cbs{$consumer_tag};
+                $self->_close(%args) unless %cbs;
                 $args{on_failure}->(@_);
             }
         );
