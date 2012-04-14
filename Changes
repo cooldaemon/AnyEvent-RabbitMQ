@@ -1,5 +1,35 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Defer finding the path of the included spec file in order to allow
+          programs to either provide a path for it or use another mechanism
+          to load the Net::AMQP protocol (like use Net::AMQP::Protocol::v0_8).
+          Otherwise, AnyEvent::RabbitMQ dies at compile time if the share dir
+          cannot be found, even if the protocol was already loaded.
+
+        - Disable Nagle's algorithm in order to reduce latency. For RPC style
+          applications this algorithm artificially introduces ~50ms of latency
+          for full roundtrip, imposing a limit of only 25 calls/s. This change
+          improves RPC throughput noticeably (even tenfold for fast servers).
+
+        - Do message publish using a single socket write (instead of three).
+          This improves throughput of small messages by 30%.
+
+        - Fix that fact that the AMQP server can ask us to close the
+          connection - we should respond with CloseOk and then
+          not say anything further otherwise we get a SIGPIPE.
+
+        - Fix a race condition stopping connections from closing properly.
+          If you ask to open a channel, and then immediately try to close
+          the connection then the not yet open channel would never remove
+          itself from the associated connection, resulting in the connection
+          never being terminated (as there were still channels associated with
+          it).
+
+        - Stop leaking all RabbitMQ messages recieved back inside
+          a closure.
+
+        - Fix a bug when closing a channel that is subscribed to multiple queues.
+
         - Allow multiple clients to have independent connections
           to RabbitMQ, as long as they all use the same spec file.
 

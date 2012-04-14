@@ -9,7 +9,6 @@ use List::MoreUtils qw(none);
 use Devel::GlobalDestruction;
 use namespace::clean;
 use File::ShareDir;
-use Readonly;
 
 use AnyEvent::Handle;
 use AnyEvent::Socket;
@@ -22,8 +21,7 @@ use AnyEvent::RabbitMQ::LocalQueue;
 
 our $VERSION = '1.05';
 
-Readonly my $DEFAULT_AMQP_SPEC
-    => File::ShareDir::dist_dir("AnyEvent-RabbitMQ") . '/fixed_amqp0-8.xml';
+my $DEFAULT_AMQP_SPEC;
 
 sub new {
     my $class = shift;
@@ -58,7 +56,10 @@ my $_loaded_spec;
 sub load_xml_spec {
     my $self = shift;
     my ($spec) = @_;
-    $spec ||= $DEFAULT_AMQP_SPEC;
+    unless ($spec) {
+        # Use the spec file included into this module package
+        $spec = $DEFAULT_AMQP_SPEC ||= File::ShareDir::dist_dir("AnyEvent-RabbitMQ") . '/fixed_amqp0-8.xml';
+    }
     if ($_loaded_spec && $_loaded_spec ne $spec) {
         croak("Tried to load AMQP spec $spec, but have already loaded $_loaded_spec, not possible");
     }
@@ -96,6 +97,9 @@ sub connect {
             my $fh = shift or return $args{on_failure}->(
                 sprintf('Error connecting to AMQP Server %s:%s: %s', $args{host}, $args{port}, $!)
             );
+
+            # Disable Nagle's algorithm in order to reduce latency
+            AnyEvent::Socket::tcp_nodelay( $fh, 1 );
 
             $self->{_handle} = AnyEvent::Handle->new(
                 fh       => $fh,
@@ -188,11 +192,10 @@ sub _check_close_and_clean {
     my ($frame, $close_cb,) = @_;
 
     return 1 if !$frame->isa('Net::AMQP::Frame::Method');
-
     my $method_frame = $frame->method_frame;
-    return 1 if !$method_frame->isa('Net::AMQP::Protocol::Connection::Close');
-
-    $self->_push_write(Net::AMQP::Protocol::Connection::CloseOk->new());
+    return 1 if !$method_frame->isa('Net::AMQP::Protocol::Connection::Close') && !$method_frame->isa('Net::AMQP::Protocol::Connection::CloseOk');
+    $self->_push_write(Net::AMQP::Protocol::Connection::CloseOk->new())
+        if $method_frame->isa('Net::AMQP::Protocol::Connection::Close');
     $self->{_channels} = {};
     $self->{_is_open} = 0;
     $self->_disconnect();
@@ -472,6 +475,31 @@ sub _push_write {
 
     $self->{_handle}->push_write($output->to_raw_frame())
         if $self->{_handle}; # Careful - could have gone (global destruction)
+    return;
+}
+
+sub _push_bulk_write {
+    my $self = shift;
+    my ($id, @frames) = @_;
+
+    my $raw_data = '';
+
+    foreach my $output (@frames) {
+        if ($output->isa('Net::AMQP::Protocol::Base')) {
+            $output = $output->frame_wrap;
+        }
+        $output->channel($id || 0);
+
+        if ($self->{verbose}) {
+            warn '[C] --> [S] ', Dumper($output);
+        }
+
+        $raw_data .= $output->to_raw_frame();
+    }
+
+    $self->{_handle}->push_write($raw_data)
+        if $self->{_handle}; # Careful - could have gone (global destruction)
+
     return;
 }
 

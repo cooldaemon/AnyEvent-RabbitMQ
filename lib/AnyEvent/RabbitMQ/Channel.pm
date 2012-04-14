@@ -42,7 +42,9 @@ sub open {
             $self->{_is_active} = 1;
             $args{on_success}->();
         },
-        $args{on_failure},
+        sub {
+            $args{on_failure}->(@_);
+        },
         $self->{id},
     );
 
@@ -55,18 +57,30 @@ sub close {
         or return;
     my %args = $connection->_set_cbs(@_);
 
-    return $self if !$self->{_is_open};
+    # Ensure to remove this channel from the connection even if we're not
+    # fully open to ensure $rf->close works always.
+    # FIXME - We can end up racing here so the server thinks the channel is
+    # open, but we've closed it - a more elegant fix would be to mark that
+    # the channel is opening, and wait for it to open before closing it
+    if (!$self->{_is_open}) {
+        $self->{connection}->delete_channel($self->{id});
+        $args{on_success}->($self);
+        return $self;
+    }
 
-    return $self->_close(%args) if 0 == scalar keys %{$self->{_consumer_cbs}};
+    my %cbs = %{ $self->{_consumer_cbs} };
+    return $self->_close(%args) unless %cbs;
 
-    for my $consumer_tag (keys %{$self->{_consumer_cbs}}) {
+    for my $consumer_tag ( keys %cbs ) {
         $self->cancel(
             consumer_tag => $consumer_tag,
             on_success   => sub {
-                $self->_close(%args);
+                delete $cbs{$consumer_tag};
+                $self->_close(%args) unless %cbs;
             },
-            on_failure   => sub {
-                $self->_close(%args);
+            on_failure => sub {
+                delete $cbs{$consumer_tag};
+                $self->_close(%args) unless %cbs;
                 $args{on_failure}->(@_);
             }
         );
@@ -274,12 +288,11 @@ sub publish {
     my $body        = delete $args{body}      || '';
     my $return_cb   = delete $args{on_return} || sub {};
 
-    $self->_publish(
-        %args,
-    )->_header(
-        $header_args, $body,
-    )->_body(
-        $body,
+    $self->{connection}->_push_bulk_write(
+        $self->{id},
+        $self->_publish(%args),
+        $self->_header($header_args, $body),
+        $self->_body($body),
     );
 
     return $self if !$args{mandatory} && !$args{immediate};
@@ -295,59 +308,50 @@ sub _publish {
     my $self = shift;
     my %args = @_;
 
-    $self->{connection}->_push_write(
-        Net::AMQP::Protocol::Basic::Publish->new(
-            exchange  => '',
-            mandatory => 0,
-            immediate => 0,
-            %args, # routing_key
-            ticket    => 0,
-        ),
-        $self->{id},
+    my $frame = Net::AMQP::Protocol::Basic::Publish->new(
+        exchange  => '',
+        mandatory => 0,
+        immediate => 0,
+        %args, # routing_key
+        ticket    => 0,
     );
 
-    return $self;
+    return $frame;
 }
 
 sub _header {
     my ($self, $args, $body,) = @_;
 
-    $self->{connection}->_push_write(
-        Net::AMQP::Frame::Header->new(
-            weight       => $args->{weight} || 0,
-            body_size    => length($body),
-            header_frame => Net::AMQP::Protocol::Basic::ContentHeader->new(
-                content_type     => 'application/octet-stream',
-                content_encoding => undef,
-                headers          => {},
-                delivery_mode    => 1,
-                priority         => 1,
-                correlation_id   => undef,
-                expiration       => undef,
-                message_id       => undef,
-                timestamp        => time,
-                type             => undef,
-                user_id          => $self->{connection}->login_user,
-                app_id           => undef,
-                cluster_id       => undef,
-                %$args,
-            ),
+    my $frame = Net::AMQP::Frame::Header->new(
+        weight       => $args->{weight} || 0,
+        body_size    => length($body),
+        header_frame => Net::AMQP::Protocol::Basic::ContentHeader->new(
+            content_type     => 'application/octet-stream',
+            content_encoding => undef,
+            headers          => {},
+            delivery_mode    => 1,
+            priority         => 1,
+            correlation_id   => undef,
+            expiration       => undef,
+            message_id       => undef,
+            timestamp        => time,
+            type             => undef,
+            user_id          => $self->{connection}->login_user,
+            app_id           => undef,
+            cluster_id       => undef,
+            %$args,
         ),
-        $self->{id},
     );
 
-    return $self;
+    return $frame;
 }
 
 sub _body {
     my ($self, $body,) = @_;
 
-    $self->{connection}->_push_write(
-        Net::AMQP::Frame::Body->new(payload => $body),
-        $self->{id},
-    );
+    my $frame = Net::AMQP::Frame::Body->new( payload => $body );
 
-    return $self;
+    return $frame;
 }
 
 sub consume {
@@ -654,6 +658,7 @@ sub _push_read_header_and_body {
             $self->{_content_queue}->get($next_frame);
         }
         else {
+            undef $next_frame;
             $frame->payload($body_payload);
             $response->{body} = $frame;
             $cb->($response);
