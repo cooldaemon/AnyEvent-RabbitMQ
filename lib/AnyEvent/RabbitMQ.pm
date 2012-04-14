@@ -97,6 +97,9 @@ sub connect {
                 sprintf('Error connecting to AMQP Server %s:%s: %s', $args{host}, $args{port}, $!)
             );
 
+            # Disable Nagle's algorithm in order to reduce latency
+            AnyEvent::Socket::tcp_nodelay( $fh, 1 );
+
             $self->{_handle} = AnyEvent::Handle->new(
                 fh       => $fh,
                 on_error => sub {

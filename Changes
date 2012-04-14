@@ -1,5 +1,10 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Disable Nagle's algorithm in order to reduce latency. For RPC style
+          applications this algorithm artificially introduces ~50ms of latency
+          for full roundtrip, imposing a limit of only 25 calls/s. This change
+          improves RPC throughput noticeably (even tenfold for fast servers).
+
         - Do message publish using a single socket write (instead of three).
           This improves throughput of small messages by 30%.
 
