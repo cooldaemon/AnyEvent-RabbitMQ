@@ -474,6 +474,31 @@ sub _push_write {
     return;
 }
 
+sub _push_bulk_write {
+    my $self = shift;
+    my ($id, @frames) = @_;
+
+    my $raw_data = '';
+
+    foreach my $output (@frames) {
+        if ($output->isa('Net::AMQP::Protocol::Base')) {
+            $output = $output->frame_wrap;
+        }
+        $output->channel($id || 0);
+
+        if ($self->{verbose}) {
+            warn '[C] --> [S] ', Dumper($output);
+        }
+
+        $raw_data .= $output->to_raw_frame();
+    }
+
+    $self->{_handle}->push_write($raw_data)
+        if $self->{_handle}; # Careful - could have gone (global destruction)
+
+    return;
+}
+
 sub _set_cbs {
     my $self = shift;
     my %args = @_;

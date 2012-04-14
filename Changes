@@ -1,5 +1,8 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Do message publish using a single socket write (instead of three).
+          This improves throughput of small messages by 30%.
+
         - Fix that fact that the AMQP server can ask us to close the
           connection - we should respond with CloseOk and then
           not say anything further otherwise we get a SIGPIPE.
