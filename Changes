@@ -22,6 +22,8 @@ Revision history for Perl extension AnyEvent::RabbitMQ
         - Stop leaking all RabbitMQ messages recieved back inside
           a closure.
 
+        - Fix a bug when closing a channel that is subscribed to multiple queues.
+
         - Allow multiple clients to have independent connections
           to RabbitMQ, as long as they all use the same spec file.
 
