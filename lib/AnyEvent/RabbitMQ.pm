@@ -9,7 +9,6 @@ use List::MoreUtils qw(none);
 use Devel::GlobalDestruction;
 use namespace::clean;
 use File::ShareDir;
-use Readonly;
 
 use AnyEvent::Handle;
 use AnyEvent::Socket;
@@ -22,8 +21,7 @@ use AnyEvent::RabbitMQ::LocalQueue;
 
 our $VERSION = '1.05';
 
-Readonly my $DEFAULT_AMQP_SPEC
-    => File::ShareDir::dist_dir("AnyEvent-RabbitMQ") . '/fixed_amqp0-8.xml';
+my $DEFAULT_AMQP_SPEC;
 
 sub new {
     my $class = shift;
@@ -58,7 +56,10 @@ my $_loaded_spec;
 sub load_xml_spec {
     my $self = shift;
     my ($spec) = @_;
-    $spec ||= $DEFAULT_AMQP_SPEC;
+    unless ($spec) {
+        # Use the spec file included into this module package
+        $spec = $DEFAULT_AMQP_SPEC ||= File::ShareDir::dist_dir("AnyEvent-RabbitMQ") . '/fixed_amqp0-8.xml';
+    }
     if ($_loaded_spec && $_loaded_spec ne $spec) {
         croak("Tried to load AMQP spec $spec, but have already loaded $_loaded_spec, not possible");
     }
