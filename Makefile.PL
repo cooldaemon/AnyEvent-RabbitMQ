@@ -18,5 +18,10 @@ install_share;
 build_requires 'Test::More';
 build_requires 'Test::Exception';
 build_requires 'version';
-auto_install;
+
+resources(
+    repository => 'git://github.com/bobtfish/AnyEvent-RabbitMQ.git',
+);
+
 WriteAll;
+
