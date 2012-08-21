@@ -1,15 +1,12 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
-        - Fix that fact that the AMQP server can ask us to close the
-          connection - we should respond with CloseOk and then
-          not say anything further otherwise we get a SIGPIPE.
-
+1.06    Tue Aug 21 15:10:00 2012
         - Fix a race condition stopping connections from closing properly.
           If you ask to open a channel, and then immediately try to close
           the connection then the not yet open channel would never remove
           itself from the associated connection, resulting in the connection
-          never being terminated (as there were still channels associated with
-          it).
+          never being terminated (as there were still channels associated
+          with it).
 
         - Stop leaking all RabbitMQ messages recieved back inside
           a closure.
