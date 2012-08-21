@@ -585,6 +585,11 @@ AnyEvnet::RabbitMQ is known to work with RabbitMQ versions 2.5.1 and version 0-8
 
 Masahito Ikuta E<lt>cooldaemon@gmail.comE<gt>
 
+=head1 MAINTAINER
+
+Currently maintained by C<< <bobtfish@bobtfish.net> >> due to the original
+author being missing in action.
+
 =head1 COPYRIGHT
 
 Copyright (c) 2010, the above named author(s).
@@ -597,3 +602,4 @@ This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
 
 =cut
+
