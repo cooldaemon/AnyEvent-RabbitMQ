@@ -1,5 +1,8 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Fix dist by putting missing version numbers back into
+          all the modules.
+
 1.06    Tue Aug 21 15:10:00 2012
         - Fix a race condition stopping connections from closing properly.
           If you ask to open a channel, and then immediately try to close
