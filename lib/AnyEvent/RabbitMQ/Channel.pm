@@ -855,7 +855,7 @@ Callback called if the subscription fails for any reason.
 Cancel a queue subscription.
 
 Note that the cancellation B<will not> take place at once, and further messages may be
-consumed before the subscription is canceled. No further messages will be
+consumed before the subscription is cancelled. No further messages will be
 consumed after the on_success callback has been called.
 
 Arguments:
@@ -869,11 +869,11 @@ consumed from.
 
 =item on_success
 
-Callback called if the subscription was successfully canceled.
+Callback called if the subscription was successfully cancelled.
 
 =item on_failure
 
-Callback called if the subscription could not be canceled for any reason.
+Callback called if the subscription could not be cancelled for any reason.
 
 =back
 
@@ -896,7 +896,7 @@ a notification that there was nothing to collect from the queue.
 
 =item on_failure
 
-This callback will be called if an error is signaled on this channel.
+This callback will be called if an error is signalled on this channel.
 
 =back
 
