@@ -654,7 +654,8 @@ sub _push_read_header_and_body {
     });
 
     my $body_payload = "";
-    my $next_frame; $next_frame = sub {
+    my $w_next_frame;
+    my $next_frame = sub {
         my $frame = shift;
 
         return $failure_cb->('Received data is not body frame')
@@ -664,15 +665,16 @@ sub _push_read_header_and_body {
 
         if (length($body_payload) < $body_size) {
             # More to come
-            $self->{_content_queue}->get($next_frame);
+            $self->{_content_queue}->get($w_next_frame);
         }
         else {
-            undef $next_frame;
             $frame->payload($body_payload);
             $response->{body} = $frame;
             $cb->($response);
         }
     };
+    $w_next_frame = $next_frame;
+    weaken($w_next_frame);
 
     $self->{_content_queue}->get($next_frame);
 
