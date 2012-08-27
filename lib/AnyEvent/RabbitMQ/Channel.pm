@@ -723,7 +723,7 @@ AnyEvent::RabbitMQ::Channel - Abstraction of an AMQP channel.
     my $ch = $rf->open_channel();
     $ch->declare_exchange(exchange => 'test_exchange');
 
-=head1 DESRIPTION
+=head1 DESCRIPTION
 
 =head1 METHODS
 
@@ -842,7 +842,7 @@ supply a value if you want to be able to later cancel the subscription.
 
 =item on_success
 
-Callback called if the subscription was successfull (before the first message is consumed).
+Callback called if the subscription was successful (before the first message is consumed).
 
 =item on_failure
 
@@ -855,7 +855,7 @@ Callback called if the subscription fails for any reason.
 Cancel a queue subscription.
 
 Note that the cancellation B<will not> take place at once, and further messages may be
-consumed before the subscription is cancelled. No further messages will be
+consumed before the subscription is canceled. No further messages will be
 consumed after the on_success callback has been called.
 
 Arguments:
@@ -869,11 +869,11 @@ consumed from.
 
 =item on_success
 
-Callback called if the subscription was successfully cancelled.
+Callback called if the subscription was successfully canceled.
 
 =item on_failure
 
-Callback called if the subscription could not be cancelled for any reason.
+Callback called if the subscription could not be canceled for any reason.
 
 =back
 
@@ -887,7 +887,7 @@ Arguments:
 
 =item queue
 
-Mandatory. Name of the queue to try to recieve a message from.
+Mandatory. Name of the queue to try to receive a message from.
 
 =item on_success
 

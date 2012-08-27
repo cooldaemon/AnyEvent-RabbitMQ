@@ -11,3 +11,5 @@ cooldaemon@gmail.com
 AMQP
 RabbitMQ
 multi
+ack
+qos
