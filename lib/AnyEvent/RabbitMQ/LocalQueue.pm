@@ -45,5 +45,15 @@ sub _drain_queue {
     return $self;
 }
 
+sub _flush {
+    my ($self, $frame) = @_;
+
+    $self->_drain_queue;
+
+    while (my $cb = shift @{$self->{_drain_code_queue}}) {
+        eval { $cb->($frame) };
+    }
+}
+
 1;
 

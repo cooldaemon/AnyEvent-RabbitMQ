@@ -598,6 +598,8 @@ sub push_queue_or_consume {
             );
             $self->{_is_open} = 0;
             $self->{_is_active} = 0;
+            $self->{_queue}->_flush($frame);
+            $self->{_content_queue}->_flush($frame);
             $self->{connection}->delete_channel($self->{id});
             $self->{on_close}->($frame);
             return $self;
