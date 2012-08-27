@@ -1,5 +1,11 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Improve Data::Dumper options for protocol dumps (Chip Salzenberg)
+        - More thoroughly eliminate memory leaks on incoming messages
+          (Chip Salzenberg)
+        - Properly handle channel close: Ensure pending requests fail
+          immediately (Chip Salzenberg)
+
 1.07    Tue Aug 21 15:47:00 2012
         - Fix dist by putting missing version numbers back into
           all the modules.
