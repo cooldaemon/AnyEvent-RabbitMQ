@@ -2,14 +2,23 @@ package AnyEvent::RabbitMQ;
 
 use strict;
 use warnings;
-
-use Data::Dumper;
 use Carp qw(confess croak);
 use List::MoreUtils qw(none);
 use Devel::GlobalDestruction;
 use namespace::clean;
 use File::ShareDir;
 use Readonly;
+
+require Data::Dumper;
+sub Dumper {
+    local $Data::Dumper::Terse = 1;
+    local $Data::Dumper::Indent = 1;
+    local $Data::Dumper::Useqq = 1;
+    local $Data::Dumper::Deparse = 1;
+    local $Data::Dumper::Quotekeys = 0;
+    local $Data::Dumper::Sortkeys = 1;
+    &Data::Dumper::Dumper
+}
 
 use AnyEvent::Handle;
 use AnyEvent::Socket;
