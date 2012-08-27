@@ -1,5 +1,6 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+1.08    Mon Aug 27 08:43:00
         - Improve Data::Dumper options for protocol dumps (Chip Salzenberg)
         - More thoroughly eliminate memory leaks on incoming messages
           (Chip Salzenberg)
