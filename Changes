@@ -1,5 +1,13 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Stop defining a _return_cb value when not using the mandatory
+          or immediate flags when publishing a message. This means that
+          if you're not using these flags, but are using an infinite set
+          of routing keys, then you won't leak infinite RAM.
+          Currently if you do use these flags and infinitely variable
+          routing keys, we still have a problem as we leak callbacks.
+          RT#79511
+
 1.08    Mon Aug 27 08:43:00
         - Improve Data::Dumper options for protocol dumps (Chip Salzenberg)
         - More thoroughly eliminate memory leaks on incoming messages

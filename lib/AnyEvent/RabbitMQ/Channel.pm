@@ -297,9 +297,11 @@ sub publish {
 
     return $self if !$args{mandatory} && !$args{immediate};
 
-    $self->{_return_cbs}->{
-        ($args{exchange} || '') . '_' . $args{routing_key}
-    } = $return_cb;
+    if ($args{mandatory} || $args{immediate}) {
+        $self->{_return_cbs}->{
+            ($args{exchange} || '') . '_' . $args{routing_key}
+        } = $return_cb;
+    }
 
     return $self;
 }
