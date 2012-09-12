@@ -163,6 +163,7 @@ sub publish {
 
 sub handle_close {
     my $method_frame = shift->method_frame;
-    die $method_frame->reply_code, $method_frame->reply_text;
+    die $method_frame->reply_code, $method_frame->reply_text
+      if $method_frame->reply_code;
 }
 

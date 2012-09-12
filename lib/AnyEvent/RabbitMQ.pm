@@ -5,9 +5,9 @@ use warnings;
 use Carp qw(confess croak);
 use List::MoreUtils qw(none);
 use Devel::GlobalDestruction;
-use namespace::clean;
 use File::ShareDir;
 use Readonly;
+use namespace::clean;
 
 require Data::Dumper;
 sub Dumper {
@@ -32,7 +32,7 @@ use AnyEvent::RabbitMQ::LocalQueue;
 our $VERSION = '1.08';
 
 Readonly my $DEFAULT_AMQP_SPEC
-    => File::ShareDir::dist_dir("AnyEvent-RabbitMQ") . '/fixed_amqp0-8.xml';
+    => File::ShareDir::dist_dir("AnyEvent-RabbitMQ") . '/fixed_amqp0-9-1.xml';
 
 sub new {
     my $class = shift;
@@ -296,7 +296,6 @@ sub _open {
         'Connection::Open',
         {
             virtual_host => $args{vhost},
-            capabilities => '',
             insist       => 1,
         },
         'Connection::OpenOk', 
@@ -320,35 +319,39 @@ sub close {
         return $self;
     }
 
-    my $close_cb = sub {
-        $self->_close(
-            sub {
-                $self->_disconnect();
-                $args{on_success}->(@_);
-            },
-            sub {
-                $self->_disconnect();
-                $args{on_failure}->(@_);
-            }
-        );
-        return $self;
-    };
-
-    if (0 == scalar keys %{$self->{_channels}}) {
-        return $close_cb->();
-    }
+    my $channels_cv = AnyEvent->condvar;
+    $channels_cv->begin(
+        sub {
+            $self->_close(
+                sub {
+                    $self->_disconnect();
+                    $args{on_success}->(@_);
+                },
+                sub {
+                    $self->_disconnect();
+                    $args{on_failure}->(@_);
+                }
+            );
+        }
+    );
 
     for my $id (keys %{$self->{_channels}}) {
          my $channel = $self->{_channels}->{$id}
             or next; # Could have already gone away on global destruction..
+
+         $channels_cv->begin;
          $channel->close(
-            on_success => $close_cb,
+            on_success => sub {
+                $channels_cv->end;
+            },
             on_failure => sub {
-                $close_cb->();
+                $channels_cv->end;
                 $args{on_failure}->(@_);
             },
         );
     }
+
+    $channels_cv->end;
 
     return $self;
 }
@@ -357,7 +360,15 @@ sub _close {
     my $self = shift;
     my ($cb, $failure_cb,) = @_;
 
-    return $self if !$self->{_is_open} || 0 < scalar keys %{$self->{_channels}};
+    if (!$self->{_is_open}) {
+        $cb->("Already closed");
+        return $self;
+    }
+
+    if (my @ch = keys %{$self->{_channels}}) {
+        $failure_cb->("Can't disconnect with channel(s) open: @ch");
+        return $self;
+    }
 
     $self->_push_write_and_read(
         'Connection::Close', {}, 'Connection::CloseOk',
@@ -592,7 +603,7 @@ You can use AnyEvent::RabbitMQ to -
   * Publish, consume, get, ack, recover and reject messages
   * Select, commit and rollback transactions
 
-AnyEvnet::RabbitMQ is known to work with RabbitMQ versions 2.5.1 and version 0-8 of the AMQP specification.
+AnyEvent::RabbitMQ is known to work with RabbitMQ versions 2.5.1 and versions 0-8 and 0-9-1 of the AMQP specification.
 
 =head1 AUTHOR
 

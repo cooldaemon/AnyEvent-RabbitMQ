@@ -1,5 +1,6 @@
 use Test::More;
 use Test::Exception;
+use Data::Dumper;
 
 use FindBin;
 use version;
@@ -15,6 +16,7 @@ my %conf = (
     user  => 'guest',
     pass  => 'guest',
     vhost => '/',
+    verbose => 1,
 );
 
 eval {
@@ -36,7 +38,7 @@ plan tests => 31;
 
 use AnyEvent::RabbitMQ;
 
-my $ar = AnyEvent::RabbitMQ->new();
+my $ar = AnyEvent::RabbitMQ->new(verbose => $conf{verbose});
 
 lives_ok sub {
     $ar->load_xml_spec()
@@ -56,7 +58,8 @@ $ar->connect(
     on_failure => failure_cb($done),
     on_close   => sub {
         my $method_frame = shift->method_frame;
-        die $method_frame->reply_code, $method_frame->reply_text;
+        die $method_frame->reply_code, $method_frame->reply_text
+          if $method_frame->reply_code;
     },
 );
 $done->recv;
@@ -72,7 +75,8 @@ $ar->open_channel(
     on_failure => failure_cb($done),
     on_close   => sub {
         my $method_frame = shift->method_frame;
-        die $method_frame->reply_code, $method_frame->reply_text;
+        die $method_frame->reply_code, $method_frame->reply_text
+          if $method_frame->reply_code;
     },
 );
 $done->recv;
