@@ -167,8 +167,8 @@ sub _read_loop {
             my ($frame) = Net::AMQP->parse_raw_frames(\$stack);
 
             if ($self->{verbose}) {
-                warn '[C] <-- [S] ' . Dumper($frame);
-                warn '-----------', "\n";
+                warn '[C] <-- [S] ', Dumper($frame),
+                     '-----------', "\n";
             }
 
             my $id = $frame->channel;
@@ -583,6 +583,10 @@ AnyEvent::RabbitMQ - An asynchronous and multi channel Perl AMQP client.
       },
       on_failure => $cv,
       on_read_failure => sub {die @_},
+      on_return  => sub {
+          my $frame = shift;
+          die "Unable to deliver ", Dumper($frame);
+      }
       on_close   => sub {
           my $method_frame = shift->method_frame;
           die $method_frame->reply_code, $method_frame->reply_text;
@@ -599,7 +603,7 @@ You can use AnyEvent::RabbitMQ to -
 
   * Declare and delete exchanges
   * Declare, delete, bind and unbind queues
-  * Set QoS
+  * Set QoS and confirm mode
   * Publish, consume, get, ack, recover and reject messages
   * Select, commit and rollback transactions
 
