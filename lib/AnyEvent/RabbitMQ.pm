@@ -47,6 +47,16 @@ sub new {
     }, $class;
 }
 
+sub verbose {
+    my $self = shift;
+    @_ ? ($self->{verbose} = shift) : $self->{verbose}
+}
+
+sub is_open {
+    my $self = shift;
+    $self->{_is_open}
+}
+
 sub channels {
     my $self = shift;
     return $self->{_channels};
@@ -55,7 +65,7 @@ sub channels {
 sub delete_channel {
     my $self = shift;
     my ($id) = @_;
-    return delete $self->{_channels}->{$id};
+    return defined delete $self->{_channels}->{$id};
 }
 
 sub login_user {
