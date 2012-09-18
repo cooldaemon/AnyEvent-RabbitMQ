@@ -16,7 +16,7 @@ my %conf = (
     user  => 'guest',
     pass  => 'guest',
     vhost => '/',
-    verbose => 1,
+    #verbose => 1,
 );
 
 eval {
@@ -34,7 +34,7 @@ eval {
 
 plan skip_all => 'Connection failure: '
                . $conf{host} . ':' . $conf{port} if $@;
-plan tests => 31;
+plan tests => 35;
 
 use AnyEvent::RabbitMQ;
 
@@ -56,30 +56,40 @@ $ar->connect(
         $done->send;
     },
     on_failure => failure_cb($done),
+    on_return  => sub {
+        my $method_frame = shift->method_frame;
+        die "return: ", $method_frame->reply_code, $method_frame->reply_text
+          if $method_frame->reply_code;
+    },
     on_close   => sub {
         my $method_frame = shift->method_frame;
-        die $method_frame->reply_code, $method_frame->reply_text
+        die "close: ", $method_frame->reply_code, $method_frame->reply_text
           if $method_frame->reply_code;
     },
 );
 $done->recv;
 
-$done = AnyEvent->condvar;
 my $ch;
-$ar->open_channel(
-    on_success => sub {
-        $ch = shift;
-        isa_ok($ch, 'AnyEvent::RabbitMQ::Channel');
-        $done->send;
-    },
-    on_failure => failure_cb($done),
-    on_close   => sub {
-        my $method_frame = shift->method_frame;
-        die $method_frame->reply_code, $method_frame->reply_text
-          if $method_frame->reply_code;
-    },
-);
+$done = AnyEvent->condvar;
+open_ch($done);
 $done->recv;
+
+sub open_ch {
+    my ($cv,) = @_;
+    $ar->open_channel(
+	on_success => sub {
+            $ch = shift;
+            isa_ok($ch, 'AnyEvent::RabbitMQ::Channel');
+            $cv->send;
+        },
+        on_failure => failure_cb($cv),
+        on_close   => sub {
+            my $method_frame = shift->method_frame;
+            die $method_frame->reply_code, $method_frame->reply_text
+              if $method_frame->reply_code;
+        },
+    );
+}
 
 $done = AnyEvent->condvar;
 $ch->declare_exchange(
@@ -296,7 +306,16 @@ pass('recover');
 # This only works for RabbitMQ >= 2.0.0
 my $can_reject = $server{product} eq 'RabbitMQ' && $server{version} >= version->parse('2.0.0');
 SKIP: {
-    skip 'We need RabbitMQ >= 2.0.0 for the reject test', 1 unless $can_reject;
+    skip 'We need RabbitMQ >= 2.0.0 for the confirm and reject test', 1 unless $can_reject;
+
+    $done = AnyEvent->condvar;
+    $ch->confirm(
+	on_success => sub { $done->send },
+    	on_failure => failure_cb($done),
+    );
+    $done->recv;
+    pass('confirm');
+
     $done = AnyEvent->condvar;
     my $reject_count = 0;
     $ch->consume(
@@ -327,9 +346,28 @@ SKIP: {
         },
         on_failure => failure_cb($done),
     );
-    publish($ch, 'RabbitMQ is powerful.', $done,);
+    my $pub_done = AnyEvent->condvar;
+    publish($ch, 'RabbitMQ is powerful.', $pub_done,);
+    $pub_done->recv;
     $done->recv;
     pass('reject');
+
+    # reopen because confirm is not compatible with transactions
+    $done = AnyEvent->condvar;
+    $ch->close(
+        on_success => sub {
+            pass('close2');
+            $done->send;
+        },
+        on_failure => failure_cb($done),
+    );
+    $done->recv;
+    undef $ch;
+
+    $done = AnyEvent->condvar;
+    open_ch($done);
+    $done->recv;
+    pass('open2');
 };
 
 $done = AnyEvent->condvar;
@@ -407,7 +445,7 @@ $done->recv;
 $done = AnyEvent->condvar;
 $ar->close(
     on_success => sub {
-        pass('close');
+        pass('close2');
         $done->send;
     },
     on_failure => failure_cb($done),
@@ -429,6 +467,7 @@ sub publish {
         exchange    => 'test_x',
         routing_key => 'test_r',
         body        => $message,
+        on_ack      => sub { $cv->send },
         on_return   => sub {
             my $response = shift;
             fail('on_return: ' . Dumper($response));
@@ -454,7 +493,6 @@ sub send_large_size_message {
         on_failure => failure_cb($done),
     );
     $done->recv;
-
     return;
 }
 

@@ -97,6 +97,7 @@ sub open_channel {
     $ar->open_channel(
         on_success => sub {$done->send(shift)},
         on_failure => sub {$done->send()},
+        on_return  => sub {die 'Receive return'},
         on_close   => \&handle_close,
     );
     my $ch = $done->recv;
@@ -155,7 +156,6 @@ sub publish {
         routing_key => $queue,
         body        => $message,
         mandatory   => 1,
-        on_return   => sub {die 'Receive return'},
     );
 
     return;
