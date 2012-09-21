@@ -30,7 +30,7 @@ sub _reset {
         _is_active     => 0,
         _is_confirm    => 0,
         _publish_tag   => 0,
-        _publish_cbs   => {},
+        _publish_cbs   => {},  # values: [on_ack, on_nack, on_return]
         _consumer_cbs  => {},
         _consumer_cans => {},
     );
@@ -352,7 +352,7 @@ sub publish {
         $tag = ++$self->{_publish_tag};
         if ($return_cb) {
             $header_args = { %$header_args };
-            $header_args->{headers}{_return} = $tag;  # just reuse the same value, why not
+            $header_args->{headers}{_ar_return} = $tag;  # just reuse the same value, why not
         }
         $self->{_publish_cbs}{$tag} = [$ack_cb, $nack_cb, $return_cb];
     }
@@ -719,9 +719,12 @@ sub push_queue_or_consume {
                 my $ret = shift;
                 my $me = $wself or return;
                 my $headers = $ret->{header}->headers || {};
-                my $tag = $headers->{_return_tag};
-                my $cbs = $me->{_publish_cbs}{$headers->{_return}};
-                my $onret_cb = ($cbs && $cbs->[1]) || $me->{on_return} || $me->{connection}{on_return} || sub {};  # oh well
+                my $onret_cb;
+                if (defined(my $tag = $headers->{_ar_return})) {
+                    my $cbs = delete $me->{_publish_cbs}{$tag};
+                    $onret_cb = $cbs->[2] if $cbs;
+                }
+                $onret_cb ||= $me->{on_return} || $me->{connection}{on_return} || sub {};  # oh well
                 $onret_cb->($frame);
             };
             $self->_push_read_header_and_body('return', $frame, $cb, $failure_cb);
