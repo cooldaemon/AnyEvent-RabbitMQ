@@ -77,7 +77,7 @@ $done->recv;
 sub open_ch {
     my ($cv,) = @_;
     $ar->open_channel(
-	on_success => sub {
+    on_success => sub {
             $ch = shift;
             isa_ok($ch, 'AnyEvent::RabbitMQ::Channel');
             $cv->send;
@@ -310,8 +310,8 @@ SKIP: {
 
     $done = AnyEvent->condvar;
     $ch->confirm(
-	on_success => sub { $done->send },
-    	on_failure => failure_cb($done),
+    on_success => sub { $done->send },
+        on_failure => failure_cb($done),
     );
     $done->recv;
     pass('confirm');
@@ -477,7 +477,7 @@ sub publish {
 
     return;
 }
- 
+
 sub send_large_size_message {
     my ($ch, $size,) = @_;
 
