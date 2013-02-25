@@ -3,7 +3,6 @@ use Test::Exception;
 use Data::Dumper;
 
 use FindBin;
-use version;
 
 my %server = (
     product => undef,
@@ -16,7 +15,7 @@ my %conf = (
     user  => 'guest',
     pass  => 'guest',
     vhost => '/',
-    #verbose => 1,
+#    verbose => 1,
 );
 
 eval {
@@ -34,7 +33,6 @@ eval {
 
 plan skip_all => 'Connection failure: '
                . $conf{host} . ':' . $conf{port} if $@;
-plan tests => 35;
 
 use AnyEvent::RabbitMQ;
 
@@ -63,7 +61,7 @@ $ar->connect(
     },
     on_close   => sub {
         my $method_frame = shift->method_frame;
-        die "close: ", $method_frame->reply_code, $method_frame->reply_text
+        Carp::confess "close: ", $method_frame->reply_code, $method_frame->reply_text
           if $method_frame->reply_code;
     },
 );
@@ -181,7 +179,7 @@ $ch->get(
 );
 $done->recv;
 
-for my $size (10, 131_064, 200_000, 10, 999_999, 10) {
+for my $size (10, 131_064, 10) {
     send_large_size_message($ch, $size);
 }
 
@@ -487,7 +485,7 @@ sub send_large_size_message {
         queue      => 'test_q',
         on_success => sub {
             my $response = shift;
-            is(length($response->{body}->payload), $size, 'get large size');
+            is(length($response->{body}->payload), $size, 'get large size: ' . $size);
             $done->send;
         },
         on_failure => failure_cb($done),
@@ -495,4 +493,6 @@ sub send_large_size_message {
     $done->recv;
     return;
 }
+
+done_testing;
 
