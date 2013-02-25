@@ -7,6 +7,7 @@ use List::MoreUtils qw(none);
 use Devel::GlobalDestruction;
 use File::ShareDir;
 use Readonly;
+use Scalar::Util qw/ weaken /;
 use namespace::clean;
 
 require Data::Dumper;
@@ -308,7 +309,7 @@ sub _open {
             virtual_host => $args{vhost},
             insist       => 1,
         },
-        'Connection::OpenOk', 
+        'Connection::OpenOk',
         sub {
             $self->{_is_open}   = 1;
             $self->{_login_user} = $args{user};
@@ -322,6 +323,8 @@ sub _open {
 
 sub close {
     my $self = shift;
+    my $weak_self = $self;
+    weaken($weak_self);
     my %args = $self->_set_cbs(@_);
 
     if (!$self->{_is_open}) {
@@ -329,39 +332,38 @@ sub close {
         return $self;
     }
 
-    my $channels_cv = AnyEvent->condvar;
-    $channels_cv->begin(
-        sub {
-            $self->_close(
-                sub {
-                    $self->_disconnect();
-                    $args{on_success}->(@_);
-                },
-                sub {
-                    $self->_disconnect();
-                    $args{on_failure}->(@_);
-                }
-            );
-        }
-    );
-
+    my $channels_to_close = 0;
+    my $all_closed_cb = sub {
+        return unless 0 == $channels_to_close;
+        $weak_self->_close(
+            sub {
+                $weak_self->_disconnect();
+                $args{on_success}->(@_);
+            },
+            sub {
+                $weak_self->_disconnect();
+                $args{on_failure}->(@_);
+            }
+        );
+    };
     for my $id (keys %{$self->{_channels}}) {
          my $channel = $self->{_channels}->{$id}
             or next; # Could have already gone away on global destruction..
 
-         $channels_cv->begin;
+        $channels_to_close++;
+
          $channel->close(
             on_success => sub {
-                $channels_cv->end;
+                $channels_to_close--;
+                $all_closed_cb->();
             },
             on_failure => sub {
-                $channels_cv->end;
+                $channels_to_close--;
+                $all_closed_cb->();
                 $args{on_failure}->(@_);
             },
         );
     }
-
-    $channels_cv->end;
 
     return $self;
 }
