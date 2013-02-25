@@ -117,7 +117,7 @@ sub connect {
                 sprintf('Error connecting to AMQP Server %s:%s: %s', $args{host}, $args{port}, $!)
             );
 
-            $self->{_handle} = AnyEvent::Handle->new(
+            my %handle_args = (
                 fh       => $fh,
                 on_error => sub {
                     my ($handle, $fatal, $message) = @_;
@@ -136,6 +136,10 @@ sub connect {
                         if exists $self->{drain_condvar};
                 },
             );
+            if ($args{tls}) {
+                $handle_args{tls} = 'connect';
+            }
+            $self->{_handle} = AnyEvent::Handle->new(%handle_args);
             $self->_read_loop($args{on_close}, $args{on_read_failure});
             $self->_start(%args,);
         },
@@ -574,6 +578,7 @@ AnyEvent::RabbitMQ - An asynchronous and multi channel Perl AMQP client.
       pass       => 'guest',
       vhost      => '/',
       timeout    => 1,
+      tls        => 0, # Or 1 if you'd like SSL
       on_success => sub {
           $ar->open_channel(
               on_success => sub {
