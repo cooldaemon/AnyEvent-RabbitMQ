@@ -626,6 +626,8 @@ You can use AnyEvent::RabbitMQ to -
 
 AnyEvent::RabbitMQ is known to work with RabbitMQ versions 2.5.1 and versions 0-8 and 0-9-1 of the AMQP specification.
 
+This client is the non-blocking version, for a blocking version with a similar API, see L<Net::RabbitFoot>.
+
 =head1 AUTHOR
 
 Masahito Ikuta E<lt>cooldaemon@gmail.comE<gt>
