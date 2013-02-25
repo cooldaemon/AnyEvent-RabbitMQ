@@ -6,6 +6,7 @@ set_spell_cmd('aspell list');
 $ENV{LANG} = 'C';
 all_pod_files_spelling_ok('lib');
 __DATA__
+API
 signalled
 cancelled
 Masahito Ikuta
