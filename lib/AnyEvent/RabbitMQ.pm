@@ -173,6 +173,10 @@ sub _read_loop {
 
             my $id = $frame->channel;
             if (0 == $id) {
+                if ($frame->type_id == 8) {
+                    $self->_push_write(Net::AMQP::Frame::Heartbeat->new());
+                    return;
+                }
                 return if !$self->_check_close_and_clean($frame, $close_cb,);
                 $self->{_queue}->push($frame);
             } else {
