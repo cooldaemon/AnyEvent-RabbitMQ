@@ -8,7 +8,7 @@ use Scalar::Util qw(weaken);
 use Carp qw(croak);
 BEGIN { *Dumper = \&AnyEvent::RabbitMQ::Dumper }
 
-our $VERSION = '1.08';
+our $VERSION = '1.09';
 
 sub new {
     my $class = shift;

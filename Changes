@@ -1,5 +1,10 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+1.09   Mon Feb 25 12:03:00 2013
+        - Support AMQP heartbeat.
+
+        - Support AMQP 0.9 standard. (Chip Salzenberg)
+
         - Stop defining a _return_cb value when not using the mandatory
           or immediate flags when publishing a message. This means that
           if you're not using these flags, but are using an infinite set
@@ -8,7 +13,7 @@ Revision history for Perl extension AnyEvent::RabbitMQ
           routing keys, we still have a problem as we leak callbacks.
           RT#79511
 
-1.08    Mon Aug 27 08:43:00
+1.08    Mon Aug 27 08:43:00 2012
         - Improve Data::Dumper options for protocol dumps (Chip Salzenberg)
         - More thoroughly eliminate memory leaks on incoming messages
           (Chip Salzenberg)
