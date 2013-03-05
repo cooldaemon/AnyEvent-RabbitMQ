@@ -1,5 +1,7 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Fix on_success callback for the Channel->close method (davel).
+
 1.10  Mon Feb 25 13:48:00 2013
         - Clarify relationship to Net::RabbitFoot. RT#71099
 
