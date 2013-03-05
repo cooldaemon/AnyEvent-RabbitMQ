@@ -350,6 +350,11 @@ sub close {
             }
         );
     };
+
+    if (scalar(keys %{ $self->{_channels} })==0) {
+        $args{on_success}->(@_);
+    }
+
     for my $id (keys %{$self->{_channels}}) {
          my $channel = $self->{_channels}->{$id}
             or next; # Could have already gone away on global destruction..
