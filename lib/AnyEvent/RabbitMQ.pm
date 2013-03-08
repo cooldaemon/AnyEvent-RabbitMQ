@@ -186,10 +186,13 @@ sub _read_loop {
                      '-----------', "\n";
             }
 
+            # TODO - check that a packet has been received within two times the
+            # heartbeat period.
+
             my $id = $frame->channel;
             if (0 == $id) {
                 if ($frame->type_id == 8) {
-                    $self->_push_write(Net::AMQP::Frame::Heartbeat->new());
+                    # Heartbeat, no action needs taking.
                     return;
                 }
                 return if !$self->_check_close_and_clean($frame, $close_cb,);
@@ -220,6 +223,7 @@ sub _check_close_and_clean {
     my $method_frame = $frame->method_frame;
     return 1 if !$method_frame->isa('Net::AMQP::Protocol::Connection::Close');
 
+    delete $self->{_heartbeat};
     $self->_push_write(Net::AMQP::Protocol::Connection::CloseOk->new());
     $self->{_channels} = {};
     $self->{_is_open} = 0;
@@ -296,6 +300,17 @@ sub _tune {
             );
 
             $self->_open(%args,);
+
+            if ($frame->method_frame->heartbeat > 0) {
+                $self->{_heartbeat} = AnyEvent->timer(
+                    after => $frame->method_frame->heartbeat,
+                    interval => $frame->method_frame->heartbeat,
+                    cb => sub {
+                        $self->_push_write(Net::AMQP::Frame::Heartbeat->new());
+                    },
+                );
+            }
+
         },
         $args{on_failure},
     );
