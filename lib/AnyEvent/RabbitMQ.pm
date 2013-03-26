@@ -292,20 +292,20 @@ sub _tune {
         sub {
             my $frame = shift;
 
+            my %tune = map { my $t = $args{tune}{$_};
+                             ( $_ => defined($t) ? $t : $frame->method_frame->$_ ) }
+                          qw( channel_max frame_max heartbeat );
+
             $self->_push_write(
-                Net::AMQP::Protocol::Connection::TuneOk->new(
-                    channel_max => $frame->method_frame->channel_max,
-                    frame_max   => $frame->method_frame->frame_max,
-                    heartbeat   => $frame->method_frame->heartbeat,
-                ),
+                Net::AMQP::Protocol::Connection::TuneOk->new(%tune)
             );
 
             $self->_open(%args,);
 
-            if ($frame->method_frame->heartbeat > 0) {
+            if ($tune{heartbeat} > 0) {
                 $self->{_heartbeat} = AnyEvent->timer(
-                    after => $frame->method_frame->heartbeat,
-                    interval => $frame->method_frame->heartbeat,
+                    after    => $tune{heartbeat},
+                    interval => $tune{heartbeat},
                     cb => sub {
                         $self->_push_write(Net::AMQP::Frame::Heartbeat->new());
                     },
@@ -600,6 +600,7 @@ AnyEvent::RabbitMQ - An asynchronous and multi channel Perl AMQP client.
       vhost      => '/',
       timeout    => 1,
       tls        => 0, # Or 1 if you'd like SSL
+      tune       => { heartbeat => 30, channel_max => $whatever, frame_max = $whatever },
       on_success => sub {
           $ar->open_channel(
               on_success => sub {
