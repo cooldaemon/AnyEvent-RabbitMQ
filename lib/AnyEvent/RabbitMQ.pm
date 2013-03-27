@@ -193,7 +193,7 @@ sub _read_loop {
             if (0 == $id) {
                 if ($frame->type_id == 8) {
                     # Heartbeat, no action needs taking.
-                    return;
+                    goto &_read_loop;
                 }
                 return if !$self->_check_close_and_clean($frame, $close_cb,);
                 $self->{_queue}->push($frame);
