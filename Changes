@@ -1,5 +1,14 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+  - Fix RT#84222, continue reading AMQP packets after a heartbeat.
+
+  - Spontaneously emit hearts as per amqp 0.9.1 spec.
+
+    The AMQP spec says, "The client should start sending heartbeats after
+    receiving a Connection.Tune method, and start monitoring heartbeats after
+    receiving Connection.Open."  There is no mention of merely responding to
+    heartbeat packets emitted by the server. (Dave Lambley)
+
 1.11  Tue Mar  5 22:22:00 2013
         - Fix on_success callback for the Channel->close method (davel).
 
