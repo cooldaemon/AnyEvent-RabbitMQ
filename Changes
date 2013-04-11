@@ -1,5 +1,6 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+1.12  Thu Apr 11 20:45:00 2013
   - Allow AMQP client to adjust tuning, e.g. heartbeat
     (Chip Salzenberg)
 
