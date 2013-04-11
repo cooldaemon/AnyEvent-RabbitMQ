@@ -1,5 +1,8 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+  - Allow AMQP client to adjust tuning, e.g. heartbeat
+    (Chip Salzenberg)
+
   - Fix RT#84222, continue reading AMQP packets after a heartbeat.
 
   - Spontaneously emit hearts as per amqp 0.9.1 spec.
