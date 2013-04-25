@@ -24,7 +24,7 @@ eval {
 
 plan skip_all => 'Connection failure: '
                . $conf{host} . ':' . $conf{port} if $@;
-plan tests => 1;
+plan tests => 3;
 
 use AnyEvent::RabbitMQ;
 
@@ -36,13 +36,18 @@ my @queues = map {
     declare_queue($ch, $queue,);
 
     my $done = AnyEvent->condvar;
+    my $cdone = AnyEvent->condvar;
     consume($ch, $queue, sub {
         my $response = shift;
         return if 'stop' ne $response->{body}->payload;
         $done->send();
+    }, sub {
+        $cdone->send();
     });
-    {name => $queue, cv => $done};
+    {name => $queue, cv => $done, ccv => $cdone};
 } (1..5);
+
+pass('queue setup');
 
 my $ch = open_channel($ar);
 for my $queue (@queues) {
@@ -62,6 +67,14 @@ for my $queue (@queues) {
     delete_queue($ch, $queue->{name});
 }
 
+my $ccount = 0;
+for my $queue (@queues) {
+    $queue->{ccv}->recv;
+    $ccount++;
+}
+
+is($ccount, 5, 'cancel count');
+
 close_ar($ar);
 
 sub connect_ar {
@@ -70,7 +83,7 @@ sub connect_ar {
         (map {$_ => $conf{$_}} qw(host port user pass vhost)),
         timeout    => 1,
         on_success => sub {$done->send(1)},
-        on_failure => sub {$done->send()},
+        on_failure => sub { diag @_; $done->send()},
         on_close   => \&handle_close,
     );
     die 'Connection failure' if !$done->recv;
@@ -83,7 +96,7 @@ sub close_ar {
     my $done = AnyEvent->condvar;
     $ar->close(
         on_success => sub {$done->send(1)},
-        on_failure => sub {$done->send()},
+        on_failure => sub { diag @_; $done->send()},
     );
     die 'Close failure' if !$done->recv;
 
@@ -135,7 +148,7 @@ sub delete_queue {
 }
 
 sub consume {
-    my ($ch, $queue, $handle_consume,) = @_;
+    my ($ch, $queue, $handle_consume, $handle_cancel,) = @_;
 
     my $done = AnyEvent->condvar;
     $ch->consume(
@@ -143,6 +156,7 @@ sub consume {
         on_success => sub {$done->send(1)},
         on_failure => sub {$done->send()},
         on_consume => $handle_consume,
+        on_cancel  => $handle_cancel,
     );
     die 'Consume failure' if !$done->recv;
 

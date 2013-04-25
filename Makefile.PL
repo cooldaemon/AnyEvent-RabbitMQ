@@ -4,7 +4,7 @@ name 'AnyEvent-RabbitMQ';
 all_from 'lib/AnyEvent/RabbitMQ.pm';
 
 requires 'List::MoreUtils';
-requires 'Net::AMQP';
+requires 'Net::AMQP' => '0.06';
 requires 'AnyEvent';
 requires 'Devel::GlobalDestruction';
 requires 'namespace::clean';
@@ -15,6 +15,7 @@ tests 't/*.t';
 author_tests 'xt';
 install_share;
 
+perl_version '5.006';
 build_requires 'Test::More';
 build_requires 'Test::Exception';
 build_requires 'version';

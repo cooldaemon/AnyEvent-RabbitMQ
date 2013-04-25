@@ -1,17 +1,33 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+<tbd>
+        - Require Net::AMQP 0.06 to:
+           + Get consume cancel notifications (e.g. queue deletion)
+           + Properly encode user-provided header strings that look like numbers
+        - Fix race between server-sent and client-sent cancellation.
+
+        - Expect server to send heartbeats as promised.  If it doesn't, go President
+            Madagasgar on its ass and SHUT DOWN EVERYTHING.
+
+        - Rearrange many things and weaken many references to eliminate bad circular
+            references.  Some circular refs are actually good, though; leave those.
+
+        - Allow customized client_properties on connection.
+
+        - Make test output clearer.
+
 1.12  Thu Apr 11 20:45:00 2013
-  - Allow AMQP client to adjust tuning, e.g. heartbeat
-    (Chip Salzenberg)
+        - Allow AMQP client to adjust tuning, e.g. heartbeat
+          (Chip Salzenberg)
 
-  - Fix RT#84222, continue reading AMQP packets after a heartbeat.
+        - Fix RT#84222, continue reading AMQP packets after a heartbeat.
 
-  - Spontaneously emit hearts as per amqp 0.9.1 spec.
+        - Spontaneously emit hearts as per amqp 0.9.1 spec.
 
-    The AMQP spec says, "The client should start sending heartbeats after
-    receiving a Connection.Tune method, and start monitoring heartbeats after
-    receiving Connection.Open."  There is no mention of merely responding to
-    heartbeat packets emitted by the server. (Dave Lambley)
+          The AMQP spec says, "The client should start sending heartbeats after
+          receiving a Connection.Tune method, and start monitoring heartbeats after
+          receiving Connection.Open."  There is no mention of merely responding to
+          heartbeat packets emitted by the server. (Dave Lambley)
 
 1.11  Tue Mar  5 22:22:00 2013
         - Fix on_success callback for the Channel->close method (davel).
