@@ -1,6 +1,6 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
-<tbd>
+1.13  Thu May  2 16:48:58 PDT 2013
         - Require Net::AMQP 0.06 to:
            + Get consume cancel notifications (e.g. queue deletion)
            + Properly encode user-provided header strings that look like numbers
