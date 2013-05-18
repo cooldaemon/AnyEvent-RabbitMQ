@@ -3,6 +3,8 @@ Revision history for Perl extension AnyEvent::RabbitMQ
 <tbd>
         - Fix paper-bag bug in heartbeat - always lost heartbeat even on
           active connections
+        - on channel close, automatically call on_return callbacks for any
+          publishes that are waiting
 
 1.13  Thu May  2 16:48:58 PDT 2013
         - Require Net::AMQP 0.06 to:

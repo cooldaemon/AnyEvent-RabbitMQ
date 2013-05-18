@@ -142,11 +142,14 @@ sub _closed {
     $self->{_queue}->_flush($frame);
     $self->{_content_queue}->_flush($frame);
 
+    # Report rejections of all outstanding publishes
+    $_->($frame) for grep { defined } map { $_->[2] } values %{ $self->{_publish_cbs} };
+
     # Report cancelation of all outstanding consumes
     my @tags = keys %{ $self->{_consumer_cbs} };
     $self->_canceled($_, $frame) for @tags;
 
-    # Reset state (redundant?)
+    # Reset state (partly redundant)
     $self->_reset;
 
     if (my $connection = $self->{connection}) {
