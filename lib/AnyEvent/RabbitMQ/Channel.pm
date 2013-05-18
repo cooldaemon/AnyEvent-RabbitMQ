@@ -797,7 +797,7 @@ sub push_queue_or_consume {
                         $failure_cb->("Received $resp of unknown delivery tag $tag");
                     }
                     elsif ($cbs->[$cbi]) {
-                        $cbs->[$cbi]->();
+                        $cbs->[$cbi]->($frame);
                     }
                 }
             }
