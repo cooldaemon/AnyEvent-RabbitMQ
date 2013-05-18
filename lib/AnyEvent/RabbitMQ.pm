@@ -194,7 +194,7 @@ sub _read_loop {
             $stack .= $_[1];
             my ($frame) = Net::AMQP->parse_raw_frames(\$stack);
 
-            $self->{_heartbeat_recv} = time if $self->{_heartbeat};
+            $self->{_heartbeat_recv} = time if $self->{_heartbeat_timer};
 
             if ($self->{verbose}) {
                 warn '[C] <-- [S] ', Dumper($frame),
