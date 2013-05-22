@@ -142,8 +142,8 @@ sub _closed {
     $self->{_queue}->_flush($frame);
     $self->{_content_queue}->_flush($frame);
 
-    # Report rejections of all outstanding publishes
-    $_->($frame) for grep { defined } map { $_->[2] } values %{ $self->{_publish_cbs} };
+    # Fake nacks of all outstanding publishes
+    $_->($frame) for grep { defined } map { $_->[1] } values %{ $self->{_publish_cbs} };
 
     # Report cancelation of all outstanding consumes
     my @tags = keys %{ $self->{_consumer_cbs} };
@@ -765,7 +765,7 @@ sub push_queue_or_consume {
                 my $headers = $ret->{header}->headers || {};
                 my $onret_cb;
                 if (defined(my $tag = $headers->{_ar_return})) {
-                    my $cbs = delete $me->{_publish_cbs}->{$tag};
+                    my $cbs = $me->{_publish_cbs}->{$tag};
                     $onret_cb = $cbs->[2] if $cbs;
                 }
                 $onret_cb ||= $me->{on_return} || $me->{connection}->{on_return} || sub {};  # oh well
