@@ -1085,6 +1085,58 @@ Callback called if the subscription fails for any reason.
 
 =back
 
+=head2 publish
+
+Publish a message to an exchange.
+
+Arguments:
+
+=over
+
+=item header
+
+Hash of AMQP message header info, including the confusingly similar element "headers",
+which may contain arbitrary string key/value pairs.
+
+=item body
+
+Message body.
+
+=item mandatory
+
+Boolean; if true, then if the message doesn't land in a queue (e.g. the exchange has no
+bindings), it will be "returned."  (see "on_return")
+
+=item immediate
+
+Boolean; if true, then if the message cannot be delivered directly to a consumer, it
+will be "returned."  (see "on_return")
+
+=item on_ack
+
+Callback called with the frame that acknowledges receipt (if channel is in confirm mode),
+typically L<Net::AMQP::Protocol::Basic::Ack>.
+
+=item on_nack
+
+Callback called with the frame that declines receipt (if the channel is in confirm mode),
+typically L<Net::AMQP::Protocol::Basic::Nack> or L<Net::AMQP::Protocol::Channel::Close>.
+
+=item on_return
+
+In AMQP, a "returned" message is one that cannot be delivered in compliance with the
+C<immediate> or C<mandatory> flags.
+
+If in confirm mode, this callback will be called with the frame that reports message
+return, typically L<Net::AMQP::Protocol::Basic::Return>.  If confirm mode is off or
+this callback is not provided, then the channel or connection objects' on_return
+callbacks (if any), will be called instead.
+
+NOTE: If confirm mode is on, the on_ack or on_nack callback will be called whether or
+not on_return is called first.
+
+=back
+
 =head2 cancel
 
 Cancel a queue subscription.
