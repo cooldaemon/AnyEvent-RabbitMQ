@@ -5,6 +5,9 @@ Revision history for Perl extension AnyEvent::RabbitMQ
           active connections
         - on channel close, automatically call on_return callbacks for any
           publishes that are waiting
+        - cope with AMQP quirk that in confirm mode, returned messages are
+	  *also* acked/nacked
+        - document $channel->publish
 
 1.13  Thu May  2 16:48:58 PDT 2013
         - Require Net::AMQP 0.06 to:
