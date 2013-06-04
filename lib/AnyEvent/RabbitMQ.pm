@@ -44,6 +44,7 @@ sub new {
         @_,
         _is_open           => 0,
         _queue             => AnyEvent::RabbitMQ::LocalQueue->new,
+        _last_chan_id      => 0,
         _channels          => {},
         _login_user        => '',
         _server_properties => {},
@@ -428,7 +429,7 @@ sub _finish_close {
         return;
     }
 
-    if (my @ch = keys %{$self->{_channels}}) {
+    if (my @ch = grep { my $ch = $self->{_channels}{$_}; defined($ch) && $ch->is_open } keys %{$self->{_channels}}) {
         $args{on_failure}->("Can't close connection with channel(s) open: @ch");
         return;
     }
@@ -452,6 +453,8 @@ sub _finish_close {
     return;
 }
 
+use constant _MAX_CHANID => 0xFFFF;
+
 sub open_channel {
     my $self = shift;
     my %args = $self->_set_cbs(@_);
@@ -467,15 +470,19 @@ sub open_channel {
     }
 
     if (!$id) {
-        for my $candidate_id (1 .. (2**16 - 1)) {
-            next if defined $self->{_channels}->{$candidate_id};
-            $id = $candidate_id;
-            last;
+        my $try_id = $self->{_last_chan_id};
+        for (1 .. 2**16) {
+            $try_id = 1 if ++$try_id > _MAX_CHANID;
+            unless (defined $self->{_channels}->{$try_id}) {
+                $id = $try_id;
+                last;
+            }
         }
         if (!$id) {
             $args{on_failure}->('Ran out of channel ids');
             return $self;
         }
+        $self->{_last_chan_id} = $id;
     }
 
     my $channel = AnyEvent::RabbitMQ::Channel->new(
