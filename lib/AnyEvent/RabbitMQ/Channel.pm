@@ -6,6 +6,7 @@ use warnings;
 use AnyEvent::RabbitMQ::LocalQueue;
 use AnyEvent;
 use Scalar::Util qw( looks_like_number weaken );
+use Devel::GlobalDestruction;
 use Carp qw(croak);
 BEGIN { *Dumper = \&AnyEvent::RabbitMQ::Dumper }
 
@@ -924,7 +925,7 @@ sub _check_open {
     my $self = shift;
     my ($failure_cb) = @_;
 
-    return 1 if $self->is_open;
+    return 1 if $self->is_open();
 
     $failure_cb->('Channel has already been closed');
     return 0;
@@ -945,7 +946,7 @@ sub _check_version {
 
 sub DESTROY {
     my $self = shift;
-    $self->close() if $self->is_open;
+    $self->close() if !in_global_destruction && $self->is_open();
     return;
 }
 
