@@ -5,6 +5,8 @@ Revision history for Perl extension AnyEvent::RabbitMQ
           active connections
         - on channel close, automatically call on_return callbacks for any
           publishes that are waiting
+        - maintain more state around opening and closing to avoid hang/race
+          when server sends Close after client does (this is possible!)
         - cope with AMQP quirk that in confirm mode, returned messages are
 	  *also* acked/nacked
         - document $channel->publish
