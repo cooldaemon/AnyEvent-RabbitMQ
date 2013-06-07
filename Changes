@@ -1,6 +1,6 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
-<tbd>
+1.14  Fri Jun  7 08:54:00 BST 2013
         - Fix paper-bag bug in heartbeat - always lost heartbeat even on
           active connections
         - on channel close, automatically call on_return callbacks for any
