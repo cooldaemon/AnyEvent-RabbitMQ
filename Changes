@@ -1,5 +1,8 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+<tbd>
+        - Fix paper-bag bug in connection close - calling nonexistent method.
+
 1.14  Fri Jun  7 08:54:00 BST 2013
         - Fix paper-bag bug in heartbeat - always lost heartbeat even on
           active connections
