@@ -665,6 +665,7 @@ AnyEvent::RabbitMQ - An asynchronous and multi channel Perl AMQP client.
       tls        => 0, # Or 1 if you'd like SSL
       tune       => { heartbeat => 30, channel_max => $whatever, frame_max = $whatever },
       on_success => sub {
+          my $ar = shift;
           $ar->open_channel(
               on_success => sub {
                   my $channel = shift;
