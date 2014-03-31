@@ -32,7 +32,7 @@ use AnyEvent::RabbitMQ::LocalQueue;
 
 use namespace::clean;
 
-our $VERSION = '1.15';
+our $VERSION = '1.1501';
 
 use constant {
     _ST_CLOSED => 0,
@@ -421,7 +421,7 @@ sub close {
     my $self = shift;
     my %args = $self->_set_cbs(@_);
 
-    if (!$self->{_state} == _ST_CLOSED) {
+    if ($self->{_state} == _ST_CLOSED) {
         $args{on_success}->(@_);
         return $self;
     }
@@ -459,7 +459,7 @@ sub _finish_close {
     my $self = shift;
     my %args = @_;
 
-    if (my @ch = map { $_->id } grep { defined() && $_->is_open } keys %{$self->{_channels}}) {
+    if (my @ch = map { $_->id } grep { defined() && $_->is_open } values %{$self->{_channels}}) {
         $args{on_failure}->("BUG: closing with channel(s) open: @ch");
         return;
     }
