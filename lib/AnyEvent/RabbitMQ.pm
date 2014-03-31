@@ -681,7 +681,7 @@ AnyEvent::RabbitMQ - An asynchronous and multi channel Perl AMQP client.
               on_close   => sub {
                   my $method_frame = shift->method_frame;
                   die $method_frame->reply_code, $method_frame->reply_text;
-              }
+              },
           );
       },
       on_failure => $cv,
@@ -689,7 +689,7 @@ AnyEvent::RabbitMQ - An asynchronous and multi channel Perl AMQP client.
       on_return  => sub {
           my $frame = shift;
           die "Unable to deliver ", Dumper($frame);
-      }
+      },
       on_close   => sub {
           my $why = shift;
           if (ref($why)) {
