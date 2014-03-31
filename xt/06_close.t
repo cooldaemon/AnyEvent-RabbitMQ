@@ -24,7 +24,7 @@ eval {
 
 plan skip_all => 'Connection failure: '
                . $conf{host} . ':' . $conf{port} if $@;
-#plan tests => 3;
+plan tests => 2;
 
 use AnyEvent::RabbitMQ;
 
@@ -32,51 +32,6 @@ subtest 'No channels', sub {
     my $ar = connect_ar();
     ok $ar->is_open, 'connection is open';
     is channel_count($ar), 0, 'no channels open';
-
-#my @queues = map {
-#    my $ch = open_channel($ar);
-#    my $queue = 'test_q' . $_;
-#    declare_queue($ch, $queue,);
-#
-#    my $done = AnyEvent->condvar;
-#    my $cdone = AnyEvent->condvar;
-#    consume($ch, $queue, sub {
-#        my $response = shift;
-#        return if 'stop' ne $response->{body}->payload;
-#        $done->send();
-#    }, sub {
-#        $cdone->send();
-#    });
-#    {name => $queue, cv => $done, ccv => $cdone};
-#} (1..5);
-
-#pass('queue setup');
-#
-#my $ch = open_channel($ar);
-#for my $queue (@queues) {
-#    publish($ch, $queue->{name}, 'hello');
-#    publish($ch, $queue->{name}, 'stop');
-#}
-#
-#my $count = 0;
-#for my $queue (@queues) {
-#    $queue->{cv}->recv;
-#    $count++;
-#}
-#
-#is($count, 5, 'consume count');
-#
-#for my $queue (@queues) {
-#    delete_queue($ch, $queue->{name});
-#}
-#
-#my $ccount = 0;
-#for my $queue (@queues) {
-#    $queue->{ccv}->recv;
-#    $ccount++;
-#}
-#
-#is($ccount, 5, 'cancel count');
 
     close_ar($ar);
     ok !$ar->is_open, 'connection closed';
@@ -97,11 +52,6 @@ subtest 'channels', sub {
     is channel_count($ar), 0, 'no channels open';
     ok !$ch->is_open, 'channel closed';
 };
-
-
-
-
-done_testing;
 
 sub connect_ar {
     my $done = AnyEvent->condvar;
