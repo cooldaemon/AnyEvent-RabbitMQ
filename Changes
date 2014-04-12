@@ -1,5 +1,9 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+1.16  Sat Apr 12 14:42:00 BST 2014
+        - Doc fixes (Mark Ellis)
+        - Fix leak when calling ->close + tests (Peter Haworth)
+
 1.15  Mon Jul 1 12:35:00 BST 2013
         - Fix paper-bag bug in connection close - calling nonexistent method.
 
