@@ -55,6 +55,8 @@ sub new {
         _channels          => {},
         _login_user        => '',
         _server_properties => {},
+        _frame_max         => undef,
+        _body_max          => undef,
     }, $class;
 }
 
@@ -344,6 +346,12 @@ sub _tune {
             my %tune = map { my $t = $args{tune}{$_};
                              ( $_ => defined($t) ? $t : $frame->method_frame->$_ ) }
                           qw( channel_max frame_max heartbeat );
+
+            $self->{_frame_max} = $tune{frame_max};
+            if ($self->{_frame_max}) {
+                # calculate how big the body can actually be
+                $self->{_body_max} = $self->{_frame_max} - Net::AMQP::_HEADER_LEN - Net::AMQP::_FOOTER_LEN;
+            }
 
             $self->_push_write(
                 Net::AMQP::Protocol::Connection::TuneOk->new(%tune,)
