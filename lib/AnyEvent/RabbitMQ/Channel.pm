@@ -477,19 +477,13 @@ sub _header {
 sub _body {
     my ($self, $body,) = @_;
 
-    if (my $body_max = $self->{connection}->{_body_max}) {
-        # chunk up body into segments measured by $frame_max
-        while (length $body) {
-            $self->{connection}->_push_write(
-                Net::AMQP::Frame::Body->new(
-                    payload => substr($body, 0, $body_max, '')),
-                $self->{id}
-            );
-        }
-    } else {
-        # frame_max is either un-negotiated (unlikely) or 0 (unlimited)
+    my $body_max = $self->{connection}->{_body_max} || length $body;
+
+    # chunk up body into segments measured by $frame_max
+    while (length $body) {
         $self->{connection}->_push_write(
-            Net::AMQP::Frame::Body->new(payload => $body),
+            Net::AMQP::Frame::Body->new(
+                payload => substr($body, 0, $body_max, '')),
             $self->{id}
         );
     }
