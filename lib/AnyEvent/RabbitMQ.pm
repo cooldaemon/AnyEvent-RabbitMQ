@@ -343,12 +343,19 @@ sub _tune {
             my $self = $weak_self or return;
             my $frame = shift;
 
-            my %tune = map { my $t = $args{tune}{$_};
-                             ( $_ => defined($t) ? $t : $frame->method_frame->$_ ) }
-                          qw( channel_max frame_max heartbeat );
+            my %tune;
+            foreach (qw( channel_max frame_max heartbeat )) {
+                my $client = $args{tune}{$_} || 0;
+                my $server = $frame->method_frame->$_ || 0;
 
-            $self->{_frame_max} = $tune{frame_max};
-            if ($self->{_frame_max}) {
+                # negotiate with the server such that we cannot request a larger
+                # value set by the server, unless the server said unlimited
+                $tune{$_} = ($server == 0 or $client == 0)
+                    ? ($server > $client ? $server : $client)   # max
+                    : ($client > $server ? $server : $client);  # min
+            }
+
+            if ($self->{_frame_max} = $tune{frame_max}) {
                 # calculate how big the body can actually be
                 $self->{_body_max} = $self->{_frame_max} - Net::AMQP::_HEADER_LEN - Net::AMQP::_FOOTER_LEN;
             }
