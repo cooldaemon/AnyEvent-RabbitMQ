@@ -44,6 +44,8 @@ use constant {
 Readonly my $DEFAULT_AMQP_SPEC
     => File::ShareDir::dist_dir("AnyEvent-RabbitMQ") . '/fixed_amqp0-9-1.xml';
 
+Readonly my $DEFAULT_CHANNEL_MAX => 2**16;
+
 sub new {
     my $class = shift;
     return bless {
@@ -57,6 +59,7 @@ sub new {
         _server_properties => {},
         _frame_max         => undef,
         _body_max          => undef,
+        _channel_max       => undef,
     }, $class;
 }
 
@@ -360,6 +363,8 @@ sub _tune {
                 $self->{_body_max} = $self->{_frame_max} - Net::AMQP::_HEADER_LEN - Net::AMQP::_FOOTER_LEN;
             }
 
+            $self->{_channel_max} = $tune{channel_max} || $DEFAULT_CHANNEL_MAX;
+
             $self->_push_write(
                 Net::AMQP::Protocol::Connection::TuneOk->new(%tune,)
             );
@@ -498,8 +503,6 @@ sub _finish_close {
     return;
 }
 
-use constant _MAX_CHANID => 0xFFFF;
-
 sub open_channel {
     my $self = shift;
     my %args = $self->_set_cbs(@_);
@@ -516,8 +519,8 @@ sub open_channel {
 
     if (!$id) {
         my $try_id = $self->{_last_chan_id};
-        for (1 .. 2**16) {
-            $try_id = 1 if ++$try_id > _MAX_CHANID;
+        for (1 .. $self->{_channel_max}) {
+            $try_id = 1 if ++$try_id > $self->{_channel_max};
             unless (defined $self->{_channels}->{$try_id}) {
                 $id = $try_id;
                 last;
