@@ -45,6 +45,7 @@ lives_ok sub {
 my $done = AnyEvent->condvar;
 $ar->connect(
     (map {$_ => $conf{$_}} qw(host port user pass vhost)),
+    tune       => { frame_max => 2**17 },
     timeout    => 1,
     on_success => sub {
         my $ar = shift;
@@ -179,7 +180,7 @@ $ch->get(
 );
 $done->recv;
 
-for my $size (10, 131_064, 10) {
+for my $size (10, 131_064, 10, 140_000) {
     send_large_size_message($ch, $size);
 }
 
