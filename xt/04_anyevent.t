@@ -102,6 +102,29 @@ $ch->declare_exchange(
 $done->recv;
 
 $done = AnyEvent->condvar;
+$ch->declare_exchange(
+    exchange   => 'test_x_dest',
+    on_success => sub {
+        pass('declare destination exchange');
+        $done->send;
+    },
+    on_failure => failure_cb($done),
+);
+$done->recv;
+
+$done = AnyEvent->condvar;
+$ch->bind_exchange(
+    source      => 'test_x',
+    destination => 'test_x_dest',
+    on_success => sub {
+        pass('bind exchange -> dest');
+        $done->send;
+    },
+    on_failure => failure_cb($done),
+);
+$done->recv;
+
+$done = AnyEvent->condvar;
 $ch->declare_queue(
     queue      => 'test_q',
     on_success => sub {
@@ -270,7 +293,7 @@ $ch->cancel(
     on_failure   => failure_cb($done),
 );
 $done->recv;
- 
+
 $done = AnyEvent->condvar;
 my $recover_count = 0;
 $ch->consume(
@@ -431,10 +454,33 @@ $ch->delete_queue(
 $done->recv;
 
 $done = AnyEvent->condvar;
+$ch->unbind_exchange(
+    source      => 'test_x',
+    destination => 'test_x_dest',
+    on_success => sub {
+        pass('unbind exchange');
+        $done->send;
+    },
+    on_failure => failure_cb($done),
+);
+$done->recv;
+
+$done = AnyEvent->condvar;
 $ch->delete_exchange(
     exchange   => 'test_x',
     on_success => sub {
         pass('delete exchange');
+        $done->send;
+    },
+    on_failure => failure_cb($done),
+);
+$done->recv;
+
+$done = AnyEvent->condvar;
+$ch->delete_exchange(
+    exchange   => 'test_x_dest',
+    on_success => sub {
+        pass('delete destination exchange');
         $done->send;
     },
     on_failure => failure_cb($done),
@@ -496,4 +542,3 @@ sub send_large_size_message {
 }
 
 done_testing;
-

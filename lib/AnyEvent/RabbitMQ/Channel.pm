@@ -220,7 +220,51 @@ sub declare_exchange {
             ticket      => 0,
             nowait      => 0, # FIXME
         },
-        'Exchange::DeclareOk', 
+        'Exchange::DeclareOk',
+        $cb,
+        $failure_cb,
+        $self->{id},
+    );
+
+    return $self;
+}
+
+sub bind_exchange {
+    my $self = shift;
+    my ($cb, $failure_cb, %args) = $self->_delete_cbs(@_);
+
+    return $self if !$self->_check_open($failure_cb);
+
+    $self->{connection}->_push_write_and_read(
+        'Exchange::Bind',
+        {
+            %args, # source, destination, routing_key
+            ticket      => 0,
+            nowait      => 0, # FIXME
+        },
+        'Exchange::BindOk',
+        $cb,
+        $failure_cb,
+        $self->{id},
+    );
+
+    return $self;
+}
+
+sub unbind_exchange {
+    my $self = shift;
+    my ($cb, $failure_cb, %args) = $self->_delete_cbs(@_);
+
+    return $self if !$self->_check_open($failure_cb);
+
+    $self->{connection}->_push_write_and_read(
+        'Exchange::Unbind',
+        {
+            %args, # source, destination, routing_key
+            ticket      => 0,
+            nowait      => 0, # FIXME
+        },
+        'Exchange::UnbindOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -243,7 +287,7 @@ sub delete_exchange {
             ticket    => 0,
             nowait    => 0, # FIXME
         },
-        'Exchange::DeleteOk', 
+        'Exchange::DeleteOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -271,7 +315,7 @@ sub declare_queue {
             ticket      => 0,
             nowait      => 0, # FIXME
         },
-        'Queue::DeclareOk', 
+        'Queue::DeclareOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -291,7 +335,7 @@ sub bind_queue {
             ticket => 0,
             nowait => 0, # FIXME
         },
-        'Queue::BindOk', 
+        'Queue::BindOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -312,7 +356,7 @@ sub unbind_queue {
             %args, # queue, exchange, routing_key
             ticket => 0,
         },
-        'Queue::UnbindOk', 
+        'Queue::UnbindOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -334,7 +378,7 @@ sub purge_queue {
             ticket => 0,
             nowait => 0, # FIXME
         },
-        'Queue::PurgeOk', 
+        'Queue::PurgeOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -358,7 +402,7 @@ sub delete_queue {
             ticket    => 0,
             nowait    => 0, # FIXME
         },
-        'Queue::DeleteOk', 
+        'Queue::DeleteOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -582,7 +626,7 @@ sub get {
             %args, # queue
             ticket => 0,
         },
-        [qw(Basic::GetOk Basic::GetEmpty)], 
+        [qw(Basic::GetOk Basic::GetEmpty)],
         sub {
             my $frame = shift;
             return $cb->({empty => $frame})
@@ -630,7 +674,7 @@ sub qos {
             prefetch_size  => 0,
             global         => 0,
         },
-        'Basic::QosOk', 
+        'Basic::QosOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -1028,6 +1072,30 @@ The name of the exchange
 
 =back
 
+=head2 bind_exchange
+
+Binds an exchange to another exchange, with a routing key.
+
+Arguments:
+
+=over
+
+=item source
+
+The name of the source exchange to bind
+
+=item destination
+
+The name of the destination exchange to bind
+
+=item routing_key
+
+The routing key to bind with
+
+=back
+
+=head2 unbind_exchange
+
 =head2 delete_exchange
 
 =head2 declare_queue
@@ -1251,5 +1319,3 @@ the server, so the on_ack callback of publish works.
 See L<AnyEvent::RabbitMQ> for author(s), copyright and license.
 
 =cut
-
-
