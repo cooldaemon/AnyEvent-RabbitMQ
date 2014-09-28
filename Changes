@@ -1,5 +1,9 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+
+       - Added the bind_exchange and unbind_exchange methods
+         for exchange-exchange bindings.
+
 1.17  Fri Jul 25 14:02:00 PDT 2014
         - Add support for chunking large bodies into multiple AMQP frames,
           allowing the sending of large messages.
