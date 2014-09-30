@@ -32,7 +32,7 @@ use AnyEvent::RabbitMQ::LocalQueue;
 
 use namespace::clean;
 
-our $VERSION = '1.17';
+our $VERSION = '1.18';
 
 use constant {
     _ST_CLOSED => 0,

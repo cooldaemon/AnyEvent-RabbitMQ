@@ -20,3 +20,4 @@
 ^[^/]+\.pl$
 ^\.shipit$
 ^\.gitignore$
+^\.travis.yml$

@@ -1,6 +1,6 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
-
+1.18  Mon Sep 29 19:36:00 PDT 2014
        - Added the bind_exchange and unbind_exchange methods
          for exchange-exchange bindings.
 
