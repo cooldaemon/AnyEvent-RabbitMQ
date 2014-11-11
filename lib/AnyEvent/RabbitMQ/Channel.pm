@@ -1015,6 +1015,11 @@ AnyEvent::RabbitMQ::Channel - Abstraction of an AMQP channel.
 
 =head1 DESCRIPTION
 
+A RabbitMQ channel.
+
+A channel is a light-weight virtual connection within a TCP connection to a
+RabbitMQ broker.
+
 =head1 ARGUMENTS FOR C<open_channel>
 
 =over
@@ -1100,6 +1105,59 @@ The routing key to bind with
 
 =head2 declare_queue
 
+Declare a queue, that is, create it if it doesn't exist yet.
+
+Arguments:
+
+=over
+
+=item queue
+
+Name of the queue to be declared. If the queue name is the empty string,
+RabbitMQ will create a unique name for the queue. This is useful for
+temporary/private reply queues.
+
+=item on_success
+
+Callback that is called when the queue was declared successfully. The argument
+to the callback is of type L<Net::AMQP::Frame::Method>. To get the name of the
+Queue (if you declared it with an empty name), you can say
+
+    on_success => sub {
+        my $method = shift;
+        my $name   = $method->method_frame->queue;
+    };
+
+=item on_failure
+
+Callback that is called when the declaration of the queue has failed.
+
+=item auto_delete
+
+0 or 1, default 0
+
+=item passive
+
+0 or 1, default 0
+
+=item durable
+
+0 or 1, default 0
+
+=item exclusive
+
+0 or 1, default 0
+
+=item no_ack
+
+0 or 1, default 1
+
+=item ticket
+
+default 0
+
+=back
+
 =head2 bind_queue
 
 Binds a queue to an exchange, with a routing key.
@@ -1170,9 +1228,17 @@ Arguments:
 
 =over
 
+=item queue
+
+The name of the queue to be consumed from.
+
 =item on_consume
 
 Callback called with an argument of the message which has been consumed.
+
+The message is a hash reference, where the value to key C<header> is an object
+of type L<Net::AMQP::Protocol::Basic::ContentHeader>, L<body> is a
+L<Net::AMQP::Frame::Body>, and C<deliver> a L<Net::AMQP::Frame::Method>.
 
 =item on_cancel
 
