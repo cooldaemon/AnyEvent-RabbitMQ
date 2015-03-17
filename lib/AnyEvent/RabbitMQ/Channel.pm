@@ -543,13 +543,14 @@ sub consume {
 
     my $consumer_cb = delete $args{on_consume} || sub {};
     my $cancel_cb   = delete $args{on_cancel} || sub {};
+    my $no_ack      = delete $args{no_ack} || 1;
 
     $self->{connection}->_push_write_and_read(
         'Basic::Consume',
         {
             consumer_tag => '',
             no_local     => 0,
-            no_ack       => 1,
+            no_ack       => $no_ack,
             exclusive    => 0,
 
             %args, # queue
