@@ -1,8 +1,12 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+1.19  Sat Mar 21 16:49:24 GMT 2015
+        - Add 'no_ack' as an optional argument to the ->consume method
+          (Dave Mueller).
+        - Fill in some missing documentation (Moritz Lenz).
 1.18  Mon Sep 29 19:36:00 PDT 2014
-       - Added the bind_exchange and unbind_exchange methods
-         for exchange-exchange bindings.
+        - Added the bind_exchange and unbind_exchange methods
+          for exchange-exchange bindings.
 
 1.17  Fri Jul 25 14:02:00 PDT 2014
         - Add support for chunking large bodies into multiple AMQP frames,
