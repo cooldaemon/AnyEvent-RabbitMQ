@@ -15,7 +15,7 @@ tests 't/*.t';
 author_tests 'xt';
 install_share;
 
-perl_version '5.006';
+perl_version '5.10';
 build_requires 'Test::More';
 build_requires 'Test::Exception';
 build_requires 'version';
