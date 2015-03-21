@@ -1260,6 +1260,11 @@ Callback called if the subscription was successful (before the first message is 
 
 Callback called if the subscription fails for any reason.
 
+=item no_ack
+
+Pass through the C<no_ack> flag. Defaults to C<1>. If set to C<1>, the server
+will not expect messages to be acknowledged.
+
 =back
 
 =head2 publish
