@@ -541,9 +541,9 @@ sub consume {
 
     return $self if !$self->_check_open($failure_cb);
 
-    my $consumer_cb = delete $args{on_consume} || sub {};
-    my $cancel_cb   = delete $args{on_cancel} || sub {};
-    my $no_ack      = delete $args{no_ack} // 1;
+    my $consumer_cb = delete $args{on_consume}  || sub {};
+    my $cancel_cb   = delete $args{on_cancel}   || sub {};
+    my $no_ack      = delete $args{no_ack}      // 1;
 
     $self->{connection}->_push_write_and_read(
         'Basic::Consume',
