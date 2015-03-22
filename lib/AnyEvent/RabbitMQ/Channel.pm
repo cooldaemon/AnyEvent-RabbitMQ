@@ -19,8 +19,6 @@ use constant {
     _ST_OPEN => 2,
 };
 
-our $VERSION = '1.16';
-
 sub new {
     my $class = shift;
 
