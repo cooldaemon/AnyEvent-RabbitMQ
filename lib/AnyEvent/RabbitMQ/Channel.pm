@@ -669,9 +669,9 @@ sub qos {
         'Basic::Qos',
         {
             prefetch_count => 1,
-            %args,
             prefetch_size  => 0,
             global         => 0,
+            %args,
         },
         'Basic::QosOk',
         $cb,
