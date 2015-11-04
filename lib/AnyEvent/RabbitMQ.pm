@@ -2,40 +2,75 @@ package AnyEvent::RabbitMQ;
 
 use strict;
 use warnings;
-
-use Data::Dumper;
 use Carp qw(confess croak);
+use Scalar::Util qw(refaddr);
 use List::MoreUtils qw(none);
 use Devel::GlobalDestruction;
-use namespace::clean;
 use File::ShareDir;
 use Readonly;
+use Scalar::Util qw/ weaken /;
+
+require Data::Dumper;
+sub Dumper {
+    local $Data::Dumper::Terse = 1;
+    local $Data::Dumper::Indent = 1;
+    local $Data::Dumper::Useqq = 1;
+    local $Data::Dumper::Deparse = 1;
+    local $Data::Dumper::Quotekeys = 0;
+    local $Data::Dumper::Sortkeys = 1;
+    &Data::Dumper::Dumper
+}
 
 use AnyEvent::Handle;
 use AnyEvent::Socket;
 
-use Net::AMQP;
+use Net::AMQP 0.06;
 use Net::AMQP::Common qw(:all);
 
 use AnyEvent::RabbitMQ::Channel;
 use AnyEvent::RabbitMQ::LocalQueue;
 
-our $VERSION = '1.05';
+use namespace::clean;
+
+our $VERSION = '1.19';
+
+use constant {
+    _ST_CLOSED => 0,
+    _ST_OPENING => 1,
+    _ST_OPEN => 2,
+    _ST_CLOSING => 3,
+};
 
 Readonly my $DEFAULT_AMQP_SPEC
-    => File::ShareDir::dist_dir("AnyEvent-RabbitMQ") . '/fixed_amqp0-8.xml';
+    => File::ShareDir::dist_dir("AnyEvent-RabbitMQ") . '/fixed_amqp0-9-1.xml';
+
+Readonly my $DEFAULT_CHANNEL_MAX => 2**16;
 
 sub new {
     my $class = shift;
     return bless {
         verbose            => 0,
         @_,
-        _is_open           => 0,
+        _state             => _ST_CLOSED,
         _queue             => AnyEvent::RabbitMQ::LocalQueue->new,
+        _last_chan_id      => 0,
         _channels          => {},
         _login_user        => '',
         _server_properties => {},
+        _frame_max         => undef,
+        _body_max          => undef,
+        _channel_max       => undef,
     }, $class;
+}
+
+sub verbose {
+    my $self = shift;
+    @_ ? ($self->{verbose} = shift) : $self->{verbose}
+}
+
+sub is_open {
+    my $self = shift;
+    $self->{_state} == _ST_OPEN
 }
 
 sub channels {
@@ -43,10 +78,15 @@ sub channels {
     return $self->{_channels};
 }
 
-sub delete_channel {
+sub _delete_channel {
     my $self = shift;
-    my ($id) = @_;
-    return delete $self->{_channels}->{$id};
+    my ($channel,) = @_;
+    my $c = $self->{_channels}->{$channel->id};
+    if (defined($c) && refaddr($c) == refaddr($channel)) {
+        delete $self->{_channels}->{$channel->id};
+        return 1;
+    }
+    return 0;
 }
 
 sub login_user {
@@ -72,7 +112,7 @@ sub connect {
     my $self = shift;
     my %args = $self->_set_cbs(@_);
 
-    if ($self->{_is_open}) {
+    if ($self->{_state} != _ST_CLOSED) {
         $args{on_failure}->('Connection has already been opened');
         return $self;
     }
@@ -82,39 +122,55 @@ sub connect {
     $args{timeout}         ||= 0;
 
     for (qw/ host port /) {
-        confess("No $_ passed to connect to") unless $args{$_};
+        $args{$_} or return $args{on_failure}->("No $_ passed to connect");
     }
 
     if ($self->{verbose}) {
         warn 'connect to ', $args{host}, ':', $args{port}, '...', "\n";
     }
 
-    $self->{_connect_guard} = AnyEvent::Socket::tcp_connect(
+    $self->{_state} = _ST_OPENING;
+
+    weaken(my $weak_self = $self);
+    my $conn; $conn = AnyEvent::Socket::tcp_connect(
         $args{host},
         $args{port},
         sub {
-            my $fh = shift or return $args{on_failure}->(
-                sprintf('Error connecting to AMQP Server %s:%s: %s', $args{host}, $args{port}, $!)
-            );
+            undef $conn;
+            my $self = $weak_self or return;
 
+            my $fh = shift;
+
+            unless ($fh) {
+                $self->{_state} = _ST_CLOSED;
+                return $args{on_failure}->(
+                    sprintf('Error connecting to AMQP Server %s:%s: %s', $args{host}, $args{port}, $!)
+                );
+            }
+
+            my $close_cb = $args{on_close};
+            my $failure_cb = $args{on_failure};
             $self->{_handle} = AnyEvent::Handle->new(
                 fh       => $fh,
                 on_error => sub {
                     my ($handle, $fatal, $message) = @_;
+                    my $self = $weak_self or return;
 
-                    $self->{_channels} = {};
-                    if (!$self->{_is_open}) {
-                        $args{on_failure}->(@_);
+                    if ($self->is_open) {
+                        $self->_server_closed($close_cb, $message);
                     }
-                    $self->{_is_open} = 0;
-                    $self->_disconnect();
-                    $args{on_close}->($message);
+                    else {
+                        $failure_cb->(@_);
+                    }
                 },
                 on_drain => sub {
                     my ($handle) = @_;
+                    my $self = $weak_self or return;
+
                     $self->{drain_condvar}->send
                         if exists $self->{drain_condvar};
                 },
+                $args{tls} ? (tls => 'connect') : (),
             );
             $self->_read_loop($args{on_close}, $args{on_read_failure});
             $self->_start(%args,);
@@ -136,7 +192,9 @@ sub _read_loop {
 
     return if !defined $self->{_handle}; # called on_error
 
+    weaken(my $weak_self = $self);
     $self->{_handle}->push_read(chunk => 8, sub {
+        my $self = $weak_self or return;
         my $data = $_[1];
         my $stack = $_[1];
 
@@ -154,18 +212,26 @@ sub _read_loop {
         }
 
         $self->{_handle}->push_read(chunk => $length, sub {
+            my $self = $weak_self or return;
             $stack .= $_[1];
             my ($frame) = Net::AMQP->parse_raw_frames(\$stack);
 
+            $self->{_heartbeat_recv} = time if $self->{_heartbeat_timer};
+
             if ($self->{verbose}) {
-                warn '[C] <-- [S] ' . Dumper($frame);
-                warn '-----------', "\n";
+                warn '[C] <-- [S] ', Dumper($frame),
+                     '-----------', "\n";
             }
 
             my $id = $frame->channel;
             if (0 == $id) {
-                return if !$self->_check_close_and_clean($frame, $close_cb,);
-                $self->{_queue}->push($frame);
+                if ($frame->type_id == 8) {
+                    # Heartbeat, no action needs taking.
+                }
+                else {
+                    return unless $self->_check_close_and_clean($frame, $close_cb,);
+                    $self->{_queue}->push($frame);
+                }
             } else {
                 my $channel = $self->{_channels}->{$id};
                 if (defined $channel) {
@@ -187,16 +253,35 @@ sub _check_close_and_clean {
     my $self = shift;
     my ($frame, $close_cb,) = @_;
 
-    return 1 if !$frame->isa('Net::AMQP::Frame::Method');
+    my $method_frame = $frame->isa('Net::AMQP::Frame::Method') ? $frame->method_frame : undef;
 
-    my $method_frame = $frame->method_frame;
-    return 1 if !$method_frame->isa('Net::AMQP::Protocol::Connection::Close');
+    if ($self->{_state} == _ST_CLOSED) {
+        return $method_frame && $method_frame->isa('Net::AMQP::Protocol::Connection::CloseOk');
+    }
 
-    $self->_push_write(Net::AMQP::Protocol::Connection::CloseOk->new());
+    if ($method_frame && $method_frame->isa('Net::AMQP::Protocol::Connection::Close')) {
+        delete $self->{_heartbeat_timer};
+        $self->_push_write(Net::AMQP::Protocol::Connection::CloseOk->new());
+        $self->_server_closed($close_cb, $frame);
+        return;
+    }
+
+    return 1;
+}
+
+sub _server_closed {
+    my $self = shift;
+    my ($close_cb, $why,) = @_;
+
+    $self->{_state} = _ST_CLOSING;
+    for my $channel (values %{ $self->{_channels} }) {
+        $channel->_closed(ref($why) ? $why : $channel->_close_frame($why));
+    }
     $self->{_channels} = {};
-    $self->{_is_open} = 0;
-    $self->_disconnect();
-    $close_cb->($frame);
+    $self->{_handle}->push_shutdown;
+    $self->{_state} = _ST_CLOSED;
+
+    $close_cb->($why);
     return;
 }
 
@@ -228,10 +313,15 @@ sub _start {
             $self->_push_write(
                 Net::AMQP::Protocol::Connection::StartOk->new(
                     client_properties => {
-                        platform    => 'Perl',
-                        product     => __PACKAGE__,
-                        information => 'http://d.hatena.ne.jp/cooldaemon/',
-                        version     => __PACKAGE__->VERSION,
+                        platform     => 'Perl',
+                        product      => __PACKAGE__,
+                        information  => 'http://d.hatena.ne.jp/cooldaemon/',
+                        version      => Net::AMQP::Value::String->new(__PACKAGE__->VERSION),
+                        capabilities => {
+                            consumer_cancel_notify     => Net::AMQP::Value::true,
+                            exchange_exchange_bindings => Net::AMQP::Value::true,
+                        },
+                        %{ $args{client_properties} || {} },
                     },
                     mechanism => 'AMQPLAIN',
                     response => {
@@ -254,22 +344,76 @@ sub _tune {
     my $self = shift;
     my %args = @_;
 
+    weaken(my $weak_self = $self);
     $self->_push_read_and_valid(
         'Connection::Tune',
         sub {
+            my $self = $weak_self or return;
             my $frame = shift;
 
+            my %tune;
+            foreach (qw( channel_max frame_max heartbeat )) {
+                my $client = $args{tune}{$_} || 0;
+                my $server = $frame->method_frame->$_ || 0;
+
+                # negotiate with the server such that we cannot request a larger
+                # value set by the server, unless the server said unlimited
+                $tune{$_} = ($server == 0 or $client == 0)
+                    ? ($server > $client ? $server : $client)   # max
+                    : ($client > $server ? $server : $client);  # min
+            }
+
+            if ($self->{_frame_max} = $tune{frame_max}) {
+                # calculate how big the body can actually be
+                $self->{_body_max} = $self->{_frame_max} - Net::AMQP::_HEADER_LEN - Net::AMQP::_FOOTER_LEN;
+            }
+
+            $self->{_channel_max} = $tune{channel_max} || $DEFAULT_CHANNEL_MAX;
+
             $self->_push_write(
-                Net::AMQP::Protocol::Connection::TuneOk->new(
-                    channel_max => $frame->method_frame->channel_max,
-                    frame_max   => $frame->method_frame->frame_max,
-                    heartbeat   => $frame->method_frame->heartbeat,
-                ),
+                Net::AMQP::Protocol::Connection::TuneOk->new(%tune,)
             );
+
+            if ($tune{heartbeat} > 0) {
+                $self->_start_heartbeat($tune{heartbeat}, %args,);
+            }
 
             $self->_open(%args,);
         },
         $args{on_failure},
+    );
+
+    return $self;
+}
+
+sub _start_heartbeat {
+    my ($self, $interval, %args,) = @_;
+
+    my $close_cb   = $args{on_close};
+    my $failure_cb = $args{on_read_failure};
+    my $last_recv = 0;
+    my $idle_cycles = 0;
+    weaken(my $weak_self = $self);
+    my $timer_cb = sub {
+        my $self = $weak_self or return;
+        if ($self->{_heartbeat_recv} != $last_recv) {
+            $last_recv = $self->{_heartbeat_recv};
+            $idle_cycles = 0;
+        }
+        elsif (++$idle_cycles > 1) {
+            delete $self->{_heartbeat_timer};
+            $failure_cb->("Heartbeat lost");
+            $self->_server_closed($close_cb, "Heartbeat lost");
+            return;
+        }
+        $self->_push_write(Net::AMQP::Frame::Heartbeat->new());
+    };
+
+    $self->{_heartbeat_recv} = time;
+    $self->{_heartbeat_timer} = AnyEvent->timer(
+        after    => $interval,
+        interval => $interval,
+        cb       => $timer_cb,
     );
 
     return $self;
@@ -283,12 +427,11 @@ sub _open {
         'Connection::Open',
         {
             virtual_host => $args{vhost},
-            capabilities => '',
             insist       => 1,
         },
-        'Connection::OpenOk', 
+        'Connection::OpenOk',
         sub {
-            $self->{_is_open}   = 1;
+            $self->{_state} = _ST_OPEN;
             $self->{_login_user} = $args{user};
             $args{on_success}->($self);
         },
@@ -299,66 +442,70 @@ sub _open {
 }
 
 sub close {
+    return if in_global_destruction;
     my $self = shift;
     my %args = $self->_set_cbs(@_);
 
-    if (!$self->{_is_open}) {
+    if ($self->{_state} == _ST_CLOSED) {
         $args{on_success}->(@_);
         return $self;
     }
-
-    my $close_cb = sub {
-        $self->_close(
-            sub {
-                $self->_disconnect();
-                $args{on_success}->(@_);
-            },
-            sub {
-                $self->_disconnect();
-                $args{on_failure}->(@_);
-            }
-        );
+    if ($self->{_state} != _ST_OPEN) {
+        $args{on_failure}->(($self->{_state} == _ST_OPENING ? "open" : "close") . " already in progress");
         return $self;
+    }
+    $self->{_state} = _ST_CLOSING;
+
+    my $cv = AE::cv {
+        delete $self->{_closing};
+        $self->_finish_close(%args);
     };
 
-    if (0 == scalar keys %{$self->{_channels}}) {
-        return $close_cb->();
+    $cv->begin();
+
+    my @ids = keys %{$self->{_channels}};
+    for my $id (@ids) {
+         my $channel = $self->{_channels}->{$id};
+         if ($channel->is_open) {
+             $cv->begin();
+             $channel->close(
+                 on_success => sub { $cv->end() },
+                 on_failure => sub { $cv->end() },
+             );
+         }
     }
 
-    for my $id (keys %{$self->{_channels}}) {
-         my $channel = $self->{_channels}->{$id}
-            or next; # Could have already gone away on global destruction..
-         $channel->close(
-            on_success => $close_cb,
-            on_failure => sub {
-                $close_cb->();
-                $args{on_failure}->(@_);
-            },
-        );
-    }
+    $cv->end();
 
     return $self;
 }
 
-sub _close {
+sub _finish_close {
     my $self = shift;
-    my ($cb, $failure_cb,) = @_;
+    my %args = @_;
 
-    return $self if !$self->{_is_open} || 0 < scalar keys %{$self->{_channels}};
+    if (my @ch = map { $_->id } grep { defined() && $_->is_open } values %{$self->{_channels}}) {
+        $args{on_failure}->("BUG: closing with channel(s) open: @ch");
+        return;
+    }
+
+    $self->{_state} = _ST_CLOSED;
 
     $self->_push_write_and_read(
         'Connection::Close', {}, 'Connection::CloseOk',
-        $cb, $failure_cb,
+        sub {
+            # circular ref ok
+            $self->{_handle}->push_shutdown;
+            $args{on_success}->(@_);
+        },
+        sub {
+            # circular ref ok
+            $self->{_handle}->push_shutdown;
+            $args{on_failure}->(@_);
+        },
     );
-    $self->{_is_open} = 0;
 
-    return $self;
-}
-
-sub _disconnect {
-    my $self = shift;
-    $self->{_handle}->push_shutdown;
-    return $self;
+    return;
 }
 
 sub open_channel {
@@ -376,15 +523,19 @@ sub open_channel {
     }
 
     if (!$id) {
-        for my $candidate_id (1 .. (2**16 - 1)) {
-            next if defined $self->{_channels}->{$candidate_id};
-            $id = $candidate_id;
-            last;
+        my $try_id = $self->{_last_chan_id};
+        for (1 .. $self->{_channel_max}) {
+            $try_id = 1 if ++$try_id > $self->{_channel_max};
+            unless (defined $self->{_channels}->{$try_id}) {
+                $id = $try_id;
+                last;
+            }
         }
         if (!$id) {
             $args{on_failure}->('Ran out of channel ids');
             return $self;
         }
+        $self->{_last_chan_id} = $id;
     }
 
     my $channel = AnyEvent::RabbitMQ::Channel->new(
@@ -400,7 +551,7 @@ sub open_channel {
             $args{on_success}->($channel);
         },
         on_failure => sub {
-            $self->delete_channel($id);
+            $self->_delete_channel($channel);
             $args{on_failure}->(@_);
         },
     );
@@ -451,8 +602,9 @@ sub _push_read_and_valid {
         }
 
         $failure_cb->(
-              'Method is not ' . join(',', @$exp) . "\n"
-            . 'Method was ' . ref $method_frame
+            $method_frame->isa('Net::AMQP::Protocol::Channel::Close')
+              ? 'Channel closed'
+              : 'Expected ' . join(',', @$exp) . ' but got ' . ref($method_frame)
         );
     });
 }
@@ -480,7 +632,7 @@ sub _set_cbs {
     my %args = @_;
 
     $args{on_success} ||= sub {};
-    $args{on_failure} ||= sub { return if in_global_destruction; die @_};
+    $args{on_failure} ||= sub { die @_ unless in_global_destruction };
 
     return %args;
 }
@@ -489,7 +641,7 @@ sub _check_open {
     my $self = shift;
     my ($failure_cb) = @_;
 
-    return 1 if $self->{_is_open};
+    return 1 if $self->is_open;
 
     $failure_cb->('Connection has already been closed');
     return 0;
@@ -507,14 +659,9 @@ sub drain_writes {
     delete $self->{drain_timer};
 }
 
-my $is_gd;
-
-END { $is_gd++ };
-
 sub DESTROY {
     my $self = shift;
-    return if $is_gd;
-    $self->close() if defined $self;
+    $self->close() unless in_global_destruction;
     return;
 }
 
@@ -538,7 +685,10 @@ AnyEvent::RabbitMQ - An asynchronous and multi channel Perl AMQP client.
       pass       => 'guest',
       vhost      => '/',
       timeout    => 1,
+      tls        => 0, # Or 1 if you'd like SSL
+      tune       => { heartbeat => 30, channel_max => $whatever, frame_max = $whatever },
       on_success => sub {
+          my $ar = shift;
           $ar->open_channel(
               on_success => sub {
                   my $channel = shift;
@@ -554,14 +704,24 @@ AnyEvent::RabbitMQ - An asynchronous and multi channel Perl AMQP client.
               on_close   => sub {
                   my $method_frame = shift->method_frame;
                   die $method_frame->reply_code, $method_frame->reply_text;
-              }
+              },
           );
       },
       on_failure => $cv,
-      on_read_failure => sub {die @_},
+      on_read_failure => sub { die @_ },
+      on_return  => sub {
+          my $frame = shift;
+          die "Unable to deliver ", Dumper($frame);
+      },
       on_close   => sub {
-          my $method_frame = shift->method_frame;
-          die $method_frame->reply_code, $method_frame->reply_text;
+          my $why = shift;
+          if (ref($why)) {
+              my $method_frame = $why->method_frame;
+              die $method_frame->reply_code, ": ", $method_frame->reply_text;
+          }
+          else {
+              die $why;
+          }
       },
   );
 
@@ -575,15 +735,25 @@ You can use AnyEvent::RabbitMQ to -
 
   * Declare and delete exchanges
   * Declare, delete, bind and unbind queues
-  * Set QoS
+  * Set QoS and confirm mode
   * Publish, consume, get, ack, recover and reject messages
   * Select, commit and rollback transactions
 
-AnyEvnet::RabbitMQ is known to work with RabbitMQ versions 2.5.1 and version 0-8 of the AMQP specification.
+Most of these actions can be done through L<AnyEvent::RabbitMQ::Channel>.
+Please see the documentation there for more details.
+
+AnyEvent::RabbitMQ is known to work with RabbitMQ versions 2.5.1 and versions 0-8 and 0-9-1 of the AMQP specification.
+
+This client is the non-blocking version, for a blocking version with a similar API, see L<Net::RabbitFoot>.
 
 =head1 AUTHOR
 
 Masahito Ikuta E<lt>cooldaemon@gmail.comE<gt>
+
+=head1 MAINTAINER
+
+Currently maintained by C<< <bobtfish@bobtfish.net> >> due to the original
+author being missing in action.
 
 =head1 COPYRIGHT
 
@@ -597,3 +767,4 @@ This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
 
 =cut
+

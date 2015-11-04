@@ -3,22 +3,69 @@ package AnyEvent::RabbitMQ::Channel;
 use strict;
 use warnings;
 
-use Scalar::Util qw(weaken);
 use AnyEvent::RabbitMQ::LocalQueue;
+use AnyEvent;
+use Scalar::Util qw( looks_like_number weaken );
+use Devel::GlobalDestruction;
+use Carp qw(croak);
+use POSIX qw(ceil);
+BEGIN { *Dumper = \&AnyEvent::RabbitMQ::Dumper }
+
+use namespace::clean;
+
+use constant {
+    _ST_CLOSED => 0,
+    _ST_OPENING => 1,
+    _ST_OPEN => 2,
+};
 
 sub new {
     my $class = shift;
+
     my $self = bless {
-        @_, # id, connection, on_close
-        _is_open       => 0,
-        _is_active     => 0,
+        on_close       => sub {},
+        @_,    # id, connection, on_return, on_close, on_inactive, on_active
         _queue         => AnyEvent::RabbitMQ::LocalQueue->new,
         _content_queue => AnyEvent::RabbitMQ::LocalQueue->new,
-        _consumer_cbs  => {},
-        _return_cbs    => {},
     }, $class;
     weaken($self->{connection});
+    return $self->_reset;
+}
+
+sub _reset {
+    my $self = shift;
+
+    my %a = (
+        _state         => _ST_CLOSED,
+        _is_active     => 0,
+        _is_confirm    => 0,
+        _publish_tag   => 0,
+        _publish_cbs   => {},  # values: [on_ack, on_nack, on_return]
+        _consumer_cbs  => {},  # values: [on_consume, on_cancel...]
+    );
+    @$self{keys %a} = values %a;
+
     return $self;
+}
+
+sub id {
+    my $self = shift;
+    return $self->{id};
+}
+
+sub is_open {
+    my $self = shift;
+    return $self->{_state} == _ST_OPEN;
+}
+
+sub is_active {
+    my $self = shift;
+    return $self->{_is_active};
+}
+
+sub is_confirm {
+    my $self = shift;
+    return $self->{_is_confirm};
 }
 
 sub queue {
@@ -30,19 +77,24 @@ sub open {
     my $self = shift;
     my %args = @_;
 
-    if ($self->{_is_open}) {
+    if ($self->{_state} != _ST_CLOSED) {
         $args{on_failure}->('Channel has already been opened');
         return $self;
     }
 
+    $self->{_state} = _ST_OPENING;
+
     $self->{connection}->_push_write_and_read(
         'Channel::Open', {}, 'Channel::OpenOk',
         sub {
-            $self->{_is_open}   = 1;
+            $self->{_state} = _ST_OPEN;
             $self->{_is_active} = 1;
-            $args{on_success}->();
+            $args{on_success}->($self);
         },
-        $args{on_failure},
+        sub {
+	    $self->{_state} = _ST_CLOSED;
+            $args{on_failure}->($self);
+        },
         $self->{id},
     );
 
@@ -55,47 +107,96 @@ sub close {
         or return;
     my %args = $connection->_set_cbs(@_);
 
-    return $self if !$self->{_is_open};
+    # If open in in progess, wait for it; 1s arbitrary timing.
 
-    return $self->_close(%args) if 0 == scalar keys %{$self->{_consumer_cbs}};
+    weaken(my $wself = $self);
+    my $t; $t = AE::timer 0, 1, sub {
+	(my $self = $wself) or undef $t, return;
+	return if $self->{_state} == _ST_OPENING;
 
-    for my $consumer_tag (keys %{$self->{_consumer_cbs}}) {
-        $self->cancel(
-            consumer_tag => $consumer_tag,
-            on_success   => sub {
-                $self->_close(%args);
-            },
-            on_failure   => sub {
-                $self->_close(%args);
-                $args{on_failure}->(@_);
-            }
+	# No more tests are required
+	undef $t;
+
+        # Double close is OK
+	if ($self->{_state} == _ST_CLOSED) {
+	    $args{on_success}->($self);
+            return;
+        }
+
+        $connection->_push_write(
+            $self->_close_frame,
+            $self->{id},
         );
-    }
+
+        # The spec says that after a party sends Channel::Close, it MUST
+        # discard all frames for that channel.  So this channel is dead
+        # immediately.
+        $self->_closed();
+
+        $connection->_push_read_and_valid(
+            'Channel::CloseOk',
+            sub {
+                $args{on_success}->($self);
+                $self->_orphan();
+            },
+            sub {
+                $args{on_failure}->(@_);
+                $self->_orphan();
+            },
+            $self->{id},
+        );
+    };
 
     return $self;
 }
 
-sub _close {
+sub _closed {
     my $self = shift;
-    my %args = @_;
+    my ($frame,) = @_;
+    $frame ||= $self->_close_frame();
 
-    $self->{connection}->_push_write_and_read(
-        'Channel::Close', {}, 'Channel::CloseOk',
-        sub {
-            $self->{_is_open} = 0;
-            $self->{_is_active} = 0;
-            $self->{connection}->delete_channel($self->{id});
-            $args{on_success}->();
-        },
-        sub {
-            $self->{_is_open} = 0;
-            $self->{_is_active} = 0;
-            $self->{connection}->delete_channel($self->{id});
-            $args{on_failure}->();
-        },
-        $self->{id},
+    return if $self->{_state} == _ST_CLOSED;
+    $self->{_state} = _ST_CLOSED;
+
+    # Perform callbacks for all outstanding commands
+    $self->{_queue}->_flush($frame);
+    $self->{_content_queue}->_flush($frame);
+
+    # Fake nacks of all outstanding publishes
+    $_->($frame) for grep { defined } map { $_->[1] } values %{ $self->{_publish_cbs} };
+
+    # Report cancelation of all outstanding consumes
+    my @tags = keys %{ $self->{_consumer_cbs} };
+    $self->_canceled($_, $frame) for @tags;
+
+    # Report close to on_close callback
+    { local $@;
+      eval { $self->{on_close}->($frame) };
+      warn "Error in channel on_close callback, ignored:\n  $@  " if $@; }
+
+    # Reset state (partly redundant)
+    $self->_reset;
+
+    return $self;
+}
+
+sub _close_frame {
+    my $self = shift;
+    my ($text,) = @_;
+
+    Net::AMQP::Frame::Method->new(
+        method_frame => Net::AMQP::Protocol::Channel::Close->new(
+            reply_text => $text,
+        ),
     );
+}
 
+sub _orphan {
+    my $self = shift;
+
+    if (my $connection = $self->{connection}) {
+        $connection->_delete_channel($self);
+    }
     return $self;
 }
 
@@ -117,7 +218,51 @@ sub declare_exchange {
             ticket      => 0,
             nowait      => 0, # FIXME
         },
-        'Exchange::DeclareOk', 
+        'Exchange::DeclareOk',
+        $cb,
+        $failure_cb,
+        $self->{id},
+    );
+
+    return $self;
+}
+
+sub bind_exchange {
+    my $self = shift;
+    my ($cb, $failure_cb, %args) = $self->_delete_cbs(@_);
+
+    return $self if !$self->_check_open($failure_cb);
+
+    $self->{connection}->_push_write_and_read(
+        'Exchange::Bind',
+        {
+            %args, # source, destination, routing_key
+            ticket      => 0,
+            nowait      => 0, # FIXME
+        },
+        'Exchange::BindOk',
+        $cb,
+        $failure_cb,
+        $self->{id},
+    );
+
+    return $self;
+}
+
+sub unbind_exchange {
+    my $self = shift;
+    my ($cb, $failure_cb, %args) = $self->_delete_cbs(@_);
+
+    return $self if !$self->_check_open($failure_cb);
+
+    $self->{connection}->_push_write_and_read(
+        'Exchange::Unbind',
+        {
+            %args, # source, destination, routing_key
+            ticket      => 0,
+            nowait      => 0, # FIXME
+        },
+        'Exchange::UnbindOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -140,7 +285,7 @@ sub delete_exchange {
             ticket    => 0,
             nowait    => 0, # FIXME
         },
-        'Exchange::DeleteOk', 
+        'Exchange::DeleteOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -168,7 +313,7 @@ sub declare_queue {
             ticket      => 0,
             nowait      => 0, # FIXME
         },
-        'Queue::DeclareOk', 
+        'Queue::DeclareOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -188,7 +333,7 @@ sub bind_queue {
             ticket => 0,
             nowait => 0, # FIXME
         },
-        'Queue::BindOk', 
+        'Queue::BindOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -209,7 +354,7 @@ sub unbind_queue {
             %args, # queue, exchange, routing_key
             ticket => 0,
         },
-        'Queue::UnbindOk', 
+        'Queue::UnbindOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -231,7 +376,7 @@ sub purge_queue {
             ticket => 0,
             nowait => 0, # FIXME
         },
-        'Queue::PurgeOk', 
+        'Queue::PurgeOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -255,7 +400,7 @@ sub delete_queue {
             ticket    => 0,
             nowait    => 0, # FIXME
         },
-        'Queue::DeleteOk', 
+        'Queue::DeleteOk',
         $cb,
         $failure_cb,
         $self->{id},
@@ -268,11 +413,37 @@ sub publish {
     my $self = shift;
     my %args = @_;
 
-    return $self if !$self->{_is_active};
+    # Docs should advise channel-level callback over this, but still, better to give user an out
+    unless ($self->{_is_active}) {
+        if (defined $args{on_inactive}) {
+            $args{on_inactive}->();
+            return $self;
+        }
+        croak "Can't publish on inactive channel (server flow control); provide on_inactive callback";
+    }
 
-    my $header_args = delete $args{header}    || {};
-    my $body        = delete $args{body}      || '';
-    my $return_cb   = delete $args{on_return} || sub {};
+    my $header_args = delete $args{header};
+    my $body        = delete $args{body};
+    my $ack_cb      = delete $args{on_ack};
+    my $nack_cb     = delete $args{on_nack};
+    my $return_cb   = delete $args{on_return};
+
+    defined($header_args) or $header_args = {};
+    defined($body) or $body = '';
+    defined($ack_cb) or defined($nack_cb) or defined($return_cb)
+       and !$self->{_is_confirm}
+       and croak "Can't set on_ack/on_nack/on_return callback when not in confirm mode";
+
+    my $tag;
+    if ($self->{_is_confirm}) {
+        # yeah, delivery tags in acks are sequential.  see Java client
+        $tag = ++$self->{_publish_tag};
+        if ($return_cb) {
+            $header_args = { %$header_args };
+            $header_args->{headers}->{_ar_return} = $tag;  # just reuse the same value, why not
+        }
+        $self->{_publish_cbs}->{$tag} = [$ack_cb, $nack_cb, $return_cb];
+    }
 
     $self->_publish(
         %args,
@@ -281,12 +452,6 @@ sub publish {
     )->_body(
         $body,
     );
-
-    return $self if !$args{mandatory} && !$args{immediate};
-
-    $self->{_return_cbs}->{
-        ($args{exchange} || '') . '_' . $args{routing_key}
-    } = $return_cb;
 
     return $self;
 }
@@ -310,16 +475,27 @@ sub _publish {
 }
 
 sub _header {
-    my ($self, $args, $body,) = @_;
+    my ($self, $args, $body) = @_;
+
+    my $weight = delete $args->{weight} || 0;
+
+    # user-provided message headers must be strings.  protect values that look like numbers.
+    my $headers = $args->{headers} || {};
+    my @prot = grep { my $v = $headers->{$_}; !ref($v) && looks_like_number($v) } keys %$headers;
+    if (@prot) {
+        $headers = {
+            %$headers,
+            map { $_ => Net::AMQP::Value::String->new($headers->{$_}) } @prot
+        };
+    }
 
     $self->{connection}->_push_write(
         Net::AMQP::Frame::Header->new(
-            weight       => $args->{weight} || 0,
+            weight       => $weight,
             body_size    => length($body),
             header_frame => Net::AMQP::Protocol::Basic::ContentHeader->new(
                 content_type     => 'application/octet-stream',
                 content_encoding => undef,
-                headers          => {},
                 delivery_mode    => 1,
                 priority         => 1,
                 correlation_id   => undef,
@@ -331,6 +507,7 @@ sub _header {
                 app_id           => undef,
                 cluster_id       => undef,
                 %$args,
+                headers          => $headers,
             ),
         ),
         $self->{id},
@@ -342,10 +519,16 @@ sub _header {
 sub _body {
     my ($self, $body,) = @_;
 
-    $self->{connection}->_push_write(
-        Net::AMQP::Frame::Body->new(payload => $body),
-        $self->{id},
-    );
+    my $body_max = $self->{connection}->{_body_max} || length $body;
+
+    # chunk up body into segments measured by $frame_max
+    while (length $body) {
+        $self->{connection}->_push_write(
+            Net::AMQP::Frame::Body->new(
+                payload => substr($body, 0, $body_max, '')),
+            $self->{id}
+        );
+    }
 
     return $self;
 }
@@ -356,25 +539,27 @@ sub consume {
 
     return $self if !$self->_check_open($failure_cb);
 
-    my $consumer_cb = delete $args{on_consume} || sub {};
-    
+    my $consumer_cb = delete $args{on_consume}  || sub {};
+    my $cancel_cb   = delete $args{on_cancel}   || sub {};
+    my $no_ack      = delete $args{no_ack}      // 1;
+
     $self->{connection}->_push_write_and_read(
         'Basic::Consume',
         {
             consumer_tag => '',
             no_local     => 0,
-            no_ack       => 1,
+            no_ack       => $no_ack,
             exclusive    => 0,
+
             %args, # queue
             ticket       => 0,
             nowait       => 0, # FIXME
         },
-        'Basic::ConsumeOk', 
+        'Basic::ConsumeOk',
         sub {
             my $frame = shift;
-            $self->{_consumer_cbs}->{
-                $frame->method_frame->consumer_tag
-            } = $consumer_cb;
+            my $tag = $frame->method_frame->consumer_tag;
+            $self->{_consumer_cbs}->{$tag} = [ $consumer_cb, $cancel_cb ];
             $cb->($frame);
         },
         $failure_cb,
@@ -395,28 +580,36 @@ sub cancel {
         return $self;
     }
 
-    if (!$self->{_consumer_cbs}->{$args{consumer_tag}}) {
+    my $cons_cbs = $self->{_consumer_cbs}->{$args{consumer_tag}};
+    unless ($cons_cbs) {
         $failure_cb->('Unknown consumer_tag');
         return $self;
     }
+    push @$cons_cbs, $cb;
 
-    $self->{connection}->_push_write_and_read(
-        'Basic::Cancel',
-        {
+    $self->{connection}->_push_write(
+        Net::AMQP::Protocol::Basic::Cancel->new(
             %args, # consumer_tag
             nowait => 0,
-        },
-        'Basic::CancelOk', 
-        sub {
-            my $frame = shift;
-            delete $self->{_consumer_cbs}->{$args{consumer_tag}};
-            $cb->($frame);
-        },
-        $failure_cb,
+        ),
         $self->{id},
     );
 
     return $self;
+}
+
+sub _canceled {
+    my $self = shift;
+    my ($tag, $frame,) = @_;
+
+    my $cons_cbs = delete $self->{_consumer_cbs}->{$tag}
+      or return 0;
+
+    shift @$cons_cbs; # no more deliveries
+    for my $cb (reverse @$cons_cbs) {
+        $cb->($frame);
+    }
+    return 1;
 }
 
 sub get {
@@ -432,7 +625,7 @@ sub get {
             %args, # queue
             ticket => 0,
         },
-        [qw(Basic::GetOk Basic::GetEmpty)], 
+        [qw(Basic::GetOk Basic::GetEmpty)],
         sub {
             my $frame = shift;
             return $cb->({empty => $frame})
@@ -476,12 +669,40 @@ sub qos {
         'Basic::Qos',
         {
             prefetch_count => 1,
-            %args,
             prefetch_size  => 0,
             global         => 0,
+            %args,
         },
-        'Basic::QosOk', 
+        'Basic::QosOk',
         $cb,
+        $failure_cb,
+        $self->{id},
+    );
+
+    return $self;
+}
+
+sub confirm {
+    my $self = shift;
+    my ($cb, $failure_cb, %args) = $self->_delete_cbs(@_);
+
+    return $self if !$self->_check_open($failure_cb);
+    return $self if !$self->_check_version(0, 9, $failure_cb);
+
+    weaken(my $wself = $self);
+
+    $self->{connection}->_push_write_and_read(
+        'Confirm::Select',
+        {
+            %args,
+            nowait       => 0, # FIXME
+        },
+        'Confirm::SelectOk',
+        sub {
+            my $me = $wself or return;
+            $me->{_is_confirm} = 1;
+            $cb->();
+        },
         $failure_cb,
         $self->{id},
     );
@@ -491,7 +712,7 @@ sub qos {
 
 sub recover {
     my $self = shift;
-    my %args = @_;
+    my ($cb, $failure_cb, %args) = $self->_delete_cbs(@_);
 
     return $self if !$self->_check_open(sub {});
 
@@ -502,6 +723,18 @@ sub recover {
         ),
         $self->{id},
     );
+
+     if (!$args{nowait} && $self->_check_version(0, 9)) {
+        $self->{connection}->_push_read_and_valid(
+            'Basic::RecoverOk',
+            $cb,
+            $failure_cb,
+            $self->{id},
+        );
+    }
+    else {
+        $cb->();
+    }
 
     return $self;
 }
@@ -576,6 +809,9 @@ sub push_queue_or_consume {
     my $self = shift;
     my ($frame, $failure_cb,) = @_;
 
+    # Note: the spec says that after a party sends Channel::Close, it MUST
+    # discard all frames for that channel other than Close and CloseOk.
+
     if ($frame->isa('Net::AMQP::Frame::Method')) {
         my $method_frame = $frame->method_frame;
         if ($method_frame->isa('Net::AMQP::Protocol::Channel::Close')) {
@@ -583,22 +819,73 @@ sub push_queue_or_consume {
                 Net::AMQP::Protocol::Channel::CloseOk->new(),
                 $self->{id},
             );
-            $self->{_is_open} = 0;
-            $self->{_is_active} = 0;
-            $self->{connection}->delete_channel($self->{id});
-            $self->{on_close}->($frame);
+            $self->_closed($frame);
+            $self->_orphan();
+            return $self;
+        } elsif ($self->{_state} != _ST_OPEN) {
+            if ($method_frame->isa('Net::AMQP::Protocol::Channel::OpenOk') ||
+                $method_frame->isa('Net::AMQP::Protocol::Channel::CloseOk')) {
+                $self->{_queue}->push($frame);
+            }
             return $self;
         } elsif ($method_frame->isa('Net::AMQP::Protocol::Basic::Deliver')) {
-            my $cb = $self->{_consumer_cbs}->{
-                $method_frame->consumer_tag
-            } || sub {};
+            my $cons_cbs = $self->{_consumer_cbs}->{$method_frame->consumer_tag};
+            my $cb = ($cons_cbs && $cons_cbs->[0]) || sub {};
             $self->_push_read_header_and_body('deliver', $frame, $cb, $failure_cb);
             return $self;
+        } elsif ($method_frame->isa('Net::AMQP::Protocol::Basic::CancelOk') ||
+                 $method_frame->isa('Net::AMQP::Protocol::Basic::Cancel')) {
+            # CancelOk means we asked for a cancel.
+            # Cancel means queue was deleted; it is not AMQP, but RMQ supports it.
+            if (!$self->_canceled($method_frame->consumer_tag, $frame)
+                  && $method_frame->isa('Net::AMQP::Protocol::Basic::CancelOk')) {
+                $failure_cb->("Received CancelOk for unknown consumer tag " . $method_frame->consumer_tag);
+            }
+            return $self;
         } elsif ($method_frame->isa('Net::AMQP::Protocol::Basic::Return')) {
-            my $cb = $self->{_return_cbs}->{
-                $method_frame->exchange . '_' . $method_frame->routing_key
-            } || sub {};
+            weaken(my $wself = $self);
+            my $cb = sub {
+                my $ret = shift;
+                my $me = $wself or return;
+                my $headers = $ret->{header}->headers || {};
+                my $onret_cb;
+                if (defined(my $tag = $headers->{_ar_return})) {
+                    my $cbs = $me->{_publish_cbs}->{$tag};
+                    $onret_cb = $cbs->[2] if $cbs;
+                }
+                $onret_cb ||= $me->{on_return} || $me->{connection}->{on_return} || sub {};  # oh well
+                $onret_cb->($frame);
+            };
             $self->_push_read_header_and_body('return', $frame, $cb, $failure_cb);
+            return $self;
+        } elsif ($method_frame->isa('Net::AMQP::Protocol::Basic::Ack') ||
+                 $method_frame->isa('Net::AMQP::Protocol::Basic::Nack')) {
+            (my $resp = ref($method_frame)) =~ s/.*:://;
+            my $cbs;
+            if (!$self->{_is_confirm}) {
+                $failure_cb->("Received $resp when not in confirm mode");
+            }
+            else {
+                my @tags;
+                if ($method_frame->{multiple}) {
+                    @tags = sort { $a <=> $b }
+                              grep { $_ <= $method_frame->{delivery_tag} }
+                                keys %{$self->{_publish_cbs}};
+                }
+                else {
+                    @tags = ($method_frame->{delivery_tag});
+                }
+                my $cbi = ($resp eq 'Ack') ? 0 : 1;
+                for my $tag (@tags) {
+                    my $cbs;
+                    if (not $cbs = delete $self->{_publish_cbs}->{$tag}) {
+                        $failure_cb->("Received $resp of unknown delivery tag $tag");
+                    }
+                    elsif ($cbs->[$cbi]) {
+                        $cbs->[$cbi]->($frame);
+                    }
+                }
+            }
             return $self;
         } elsif ($method_frame->isa('Net::AMQP::Protocol::Channel::Flow')) {
             $self->{_is_active} = $method_frame->active;
@@ -608,6 +895,9 @@ sub push_queue_or_consume {
                 ),
                 $self->{id},
             );
+            my $cbname = $self->{_is_active} ? 'on_active' : 'on_inactive';
+            my $cb = $self->{$cbname} || $self->{connection}->{$cbname} || sub {};
+            $cb->($frame);
             return $self;
         }
         $self->{_queue}->push($frame);
@@ -640,9 +930,13 @@ sub _push_read_header_and_body {
         $body_size = $frame->body_size;
     });
 
+    weaken(my $wcontq = $self->{_content_queue});
     my $body_payload = "";
-    my $next_frame; $next_frame = sub {
+    my $w_next_frame;
+    my $next_frame = sub {
         my $frame = shift;
+
+        my $contq = $wcontq or return;
 
         return $failure_cb->('Received data is not body frame')
             if !$frame->isa('Net::AMQP::Frame::Body');
@@ -651,7 +945,7 @@ sub _push_read_header_and_body {
 
         if (length($body_payload) < $body_size) {
             # More to come
-            $self->{_content_queue}->get($next_frame);
+            $contq->get($w_next_frame);
         }
         else {
             $frame->payload($body_payload);
@@ -659,6 +953,8 @@ sub _push_read_header_and_body {
             $cb->($response);
         }
     };
+    $w_next_frame = $next_frame;
+    weaken($w_next_frame);
 
     $self->{_content_queue}->get($next_frame);
 
@@ -679,19 +975,30 @@ sub _check_open {
     my $self = shift;
     my ($failure_cb) = @_;
 
-    return 1 if $self->{_is_open};
+    return 1 if $self->is_open();
 
     $failure_cb->('Channel has already been closed');
     return 0;
 }
 
-sub DESTROY {
+sub _check_version {
     my $self = shift;
-    $self->close() if defined $self;
-    return;
+    my ($major, $minor, $failure_cb) = @_;
+
+    my $amaj = $Net::AMQP::Protocol::VERSION_MAJOR;
+    my $amin = $Net::AMQP::Protocol::VERSION_MINOR;
+
+    return 1 if $amaj >= $major || $amaj == $major && $amin >= $minor;
+
+    $failure_cb->("Not supported in AMQP $amaj-$amin") if $failure_cb;
+    return 0;
 }
 
-1;
+sub DESTROY {
+    my $self = shift;
+    $self->close() if !in_global_destruction && $self->is_open();
+    return;
+}
 
 1;
 __END__
@@ -705,7 +1012,29 @@ AnyEvent::RabbitMQ::Channel - Abstraction of an AMQP channel.
     my $ch = $rf->open_channel();
     $ch->declare_exchange(exchange => 'test_exchange');
 
-=head1 DESRIPTION
+=head1 DESCRIPTION
+
+A RabbitMQ channel.
+
+A channel is a light-weight virtual connection within a TCP connection to a
+RabbitMQ broker.
+
+=head1 ARGUMENTS FOR C<open_channel>
+
+=over
+
+=item on_close
+
+Callback invoked when the channel closes.  Callback will be passed the
+incoming message that caused the close, if any.
+
+=item on_return
+
+Callback invoked when a mandatory or immediate message publish fails.
+Callback will be passed the incoming message, with accessors
+C<method_frame>, C<header_frame>, and C<body_frame>.
+
+=back
 
 =head1 METHODS
 
@@ -747,9 +1076,86 @@ The name of the exchange
 
 =back
 
+=head2 bind_exchange
+
+Binds an exchange to another exchange, with a routing key.
+
+Arguments:
+
+=over
+
+=item source
+
+The name of the source exchange to bind
+
+=item destination
+
+The name of the destination exchange to bind
+
+=item routing_key
+
+The routing key to bind with
+
+=back
+
+=head2 unbind_exchange
+
 =head2 delete_exchange
 
 =head2 declare_queue
+
+Declare a queue, that is, create it if it doesn't exist yet.
+
+Arguments:
+
+=over
+
+=item queue
+
+Name of the queue to be declared. If the queue name is the empty string,
+RabbitMQ will create a unique name for the queue. This is useful for
+temporary/private reply queues.
+
+=item on_success
+
+Callback that is called when the queue was declared successfully. The argument
+to the callback is of type L<Net::AMQP::Frame::Method>. To get the name of the
+Queue (if you declared it with an empty name), you can say
+
+    on_success => sub {
+        my $method = shift;
+        my $name   = $method->method_frame->queue;
+    };
+
+=item on_failure
+
+Callback that is called when the declaration of the queue has failed.
+
+=item auto_delete
+
+0 or 1, default 0
+
+=item passive
+
+0 or 1, default 0
+
+=item durable
+
+0 or 1, default 0
+
+=item exclusive
+
+0 or 1, default 0
+
+=item no_ack
+
+0 or 1, default 1
+
+=item ticket
+
+default 0
+
+=back
 
 =head2 bind_queue
 
@@ -795,6 +1201,10 @@ Arguments:
 
 The text body of the message to send.
 
+=item header
+
+Customer headers for the message (if any).
+
 =item exchange
 
 The name of the exchange to send the message to.
@@ -802,6 +1212,10 @@ The name of the exchange to send the message to.
 =item routing_key
 
 The routing key with which to publish the message.
+
+=item on_ack
+
+Callback (if any) for confirming acknowledgment when in confirm mode.
 
 =back
 
@@ -813,9 +1227,23 @@ Arguments:
 
 =over
 
+=item queue
+
+The name of the queue to be consumed from.
+
 =item on_consume
 
 Callback called with an argument of the message which has been consumed.
+
+The message is a hash reference, where the value to key C<header> is an object
+of type L<Net::AMQP::Protocol::Basic::ContentHeader>, L<body> is a
+L<Net::AMQP::Frame::Body>, and C<deliver> a L<Net::AMQP::Frame::Method>.
+
+=item on_cancel
+
+Callback called if consumption is canceled.  This may be at client request
+or as a side effect of queue deletion.  (Notification of queue deletion is a
+RabbitMQ extension.)
 
 =item consumer_tag
 
@@ -824,11 +1252,68 @@ supply a value if you want to be able to later cancel the subscription.
 
 =item on_success
 
-Callback called if the subscription was successfull (before the first message is consumed).
+Callback called if the subscription was successful (before the first message is consumed).
 
 =item on_failure
 
 Callback called if the subscription fails for any reason.
+
+=item no_ack
+
+Pass through the C<no_ack> flag. Defaults to C<1>. If set to C<1>, the server
+will not expect messages to be acknowledged.
+
+=back
+
+=head2 publish
+
+Publish a message to an exchange.
+
+Arguments:
+
+=over
+
+=item header
+
+Hash of AMQP message header info, including the confusingly similar element "headers",
+which may contain arbitrary string key/value pairs.
+
+=item body
+
+Message body.
+
+=item mandatory
+
+Boolean; if true, then if the message doesn't land in a queue (e.g. the exchange has no
+bindings), it will be "returned."  (see "on_return")
+
+=item immediate
+
+Boolean; if true, then if the message cannot be delivered directly to a consumer, it
+will be "returned."  (see "on_return")
+
+=item on_ack
+
+Callback called with the frame that acknowledges receipt (if channel is in confirm mode),
+typically L<Net::AMQP::Protocol::Basic::Ack>.
+
+=item on_nack
+
+Callback called with the frame that declines receipt (if the channel is in confirm mode),
+typically L<Net::AMQP::Protocol::Basic::Nack> or L<Net::AMQP::Protocol::Channel::Close>.
+
+=item on_return
+
+In AMQP, a "returned" message is one that cannot be delivered in compliance with the
+C<immediate> or C<mandatory> flags.
+
+If in confirm mode, this callback will be called with the frame that reports message
+return, typically L<Net::AMQP::Protocol::Basic::Return>.  If confirm mode is off or
+this callback is not provided, then the channel or connection objects' on_return
+callbacks (if any), will be called instead.
+
+NOTE: If confirm mode is on, the on_ack or on_nack callback will be called whether or
+not on_return is called first.
 
 =back
 
@@ -869,7 +1354,7 @@ Arguments:
 
 =item queue
 
-Mandatory. Name of the queue to try to recieve a message from.
+Mandatory. Name of the queue to try to receive a message from.
 
 =item on_success
 
@@ -878,13 +1363,18 @@ a notification that there was nothing to collect from the queue.
 
 =item on_failure
 
-This callback will be called if an error is signaled on this channel.
+This callback will be called if an error is signalled on this channel.
 
 =back
 
 =head2 ack
 
 =head2 qos
+
+=head2 confirm
+
+Put channel into confirm mode.  In confirm mode, publishes are confirmed by
+the server, so the on_ack callback of publish works.
 
 =head2 recover
 
@@ -899,5 +1389,3 @@ This callback will be called if an error is signaled on this channel.
 See L<AnyEvent::RabbitMQ> for author(s), copyright and license.
 
 =cut
-
-
