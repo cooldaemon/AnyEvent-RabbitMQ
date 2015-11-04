@@ -139,9 +139,14 @@ sub connect {
             undef $conn;
             my $self = $weak_self or return;
 
-            my $fh = shift or return $args{on_failure}->(
-                sprintf('Error connecting to AMQP Server %s:%s: %s', $args{host}, $args{port}, $!)
-            );
+            my $fh = shift;
+
+            unless ($fh) {
+                $self->{_state} = _ST_CLOSED;
+                return $args{on_failure}->(
+                    sprintf('Error connecting to AMQP Server %s:%s: %s', $args{host}, $args{port}, $!)
+                );
+            }
 
             my $close_cb = $args{on_close};
             my $failure_cb = $args{on_failure};
