@@ -1189,36 +1189,6 @@ Flushes the contents of a queue.
 
 Deletes a queue. The queue may not have any active consumers.
 
-=head2 publish
-
-Publish a message to an exchange
-
-Arguments:
-
-=over
-
-=item body
-
-The text body of the message to send.
-
-=item header
-
-Customer headers for the message (if any).
-
-=item exchange
-
-The name of the exchange to send the message to.
-
-=item routing_key
-
-The routing key with which to publish the message.
-
-=item on_ack
-
-Callback (if any) for confirming acknowledgment when in confirm mode.
-
-=back
-
 =head2 consume
 
 Subscribe to consume messages from a queue.
@@ -1273,6 +1243,14 @@ Arguments:
 
 =over
 
+=item exchange
+
+The name of the exchange to send the message to.
+
+=item routing_key
+
+The routing key with which to publish the message.
+
 =item header
 
 Hash of AMQP message header info, including the confusingly similar element "headers",
@@ -1280,7 +1258,7 @@ which may contain arbitrary string key/value pairs.
 
 =item body
 
-Message body.
+The text body of the message to send.
 
 =item mandatory
 
