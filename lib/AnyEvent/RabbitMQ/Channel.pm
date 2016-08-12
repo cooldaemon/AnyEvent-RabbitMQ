@@ -913,6 +913,31 @@ sub _push_read_header_and_body {
     my ($type, $frame, $cb, $failure_cb,) = @_;
     my $response = {$type => $frame};
     my $body_size = 0;
+    my $body_payload = "";
+
+    weaken(my $wcontq = $self->{_content_queue});
+    my $w_body_frame;
+    my $body_frame = sub {
+        my $frame = shift;
+
+        return $failure_cb->('Received data is not body frame')
+            if !$frame->isa('Net::AMQP::Frame::Body');
+
+        $body_payload .= $frame->payload;
+
+        if (length($body_payload) < $body_size) {
+            # More to come
+            my $contq = $wcontq or return;
+            $contq->get($w_body_frame);
+        }
+        else {
+            $frame->payload($body_payload);
+            $response->{body} = $frame;
+            $cb->($response);
+        }
+    };
+    $w_body_frame = $body_frame;
+    weaken($w_body_frame);
 
     $self->{_content_queue}->get(sub{
         my $frame = shift;
@@ -927,36 +952,16 @@ sub _push_read_header_and_body {
         ) if !$header_frame->isa('Net::AMQP::Protocol::Basic::ContentHeader');
 
         $response->{header} = $header_frame;
+
         $body_size = $frame->body_size;
-    });
-
-    weaken(my $wcontq = $self->{_content_queue});
-    my $body_payload = "";
-    my $w_next_frame;
-    my $next_frame = sub {
-        my $frame = shift;
-
-        my $contq = $wcontq or return;
-
-        return $failure_cb->('Received data is not body frame')
-            if !$frame->isa('Net::AMQP::Frame::Body');
-
-        $body_payload .= $frame->payload;
-
-        if (length($body_payload) < $body_size) {
-            # More to come
-            $contq->get($w_next_frame);
-        }
-        else {
-            $frame->payload($body_payload);
-            $response->{body} = $frame;
+        if ( $body_size ) {
+            my $contq = $wcontq or return;
+            $contq->get($body_frame);
+        } else {
+            $response->{body} = undef;
             $cb->($response);
         }
-    };
-    $w_next_frame = $next_frame;
-    weaken($w_next_frame);
-
-    $self->{_content_queue}->get($next_frame);
+    });
 
     return $self;
 }
