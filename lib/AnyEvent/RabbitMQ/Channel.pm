@@ -430,9 +430,10 @@ sub publish {
 
     defined($header_args) or $header_args = {};
     defined($body) or $body = '';
-    defined($ack_cb) or defined($nack_cb) or defined($return_cb)
-       and !$self->{_is_confirm}
-       and croak "Can't set on_ack/on_nack/on_return callback when not in confirm mode";
+    if ( defined($ack_cb) or defined($nack_cb) or defined($return_cb) ) {
+        croak "Can't set on_ack/on_nack/on_return callback when not in confirm mode"
+            unless $self->{_is_confirm};
+    }
 
     my $tag;
     if ($self->{_is_confirm}) {
