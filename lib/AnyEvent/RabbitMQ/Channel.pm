@@ -1216,7 +1216,7 @@ L<Net::AMQP::Frame::Body>, and C<deliver> a L<Net::AMQP::Frame::Method>.
 
 =item on_cancel
 
-Callback called if consumption is canceled.  This may be at client request
+Callback called if consumption is cancelled.  This may be at client request
 or as a side effect of queue deletion.  (Notification of queue deletion is a
 RabbitMQ extension.)
 
