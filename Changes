@@ -1,5 +1,6 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+1.19_01  Sat 16 May 21:18:27 BST 2020
         - Allow AnyEvent::TLS options to be passed (Nicolas R).
         - Correct check when in confirm mode (Ruslan Zakirov).
         - Fix @INC breaking perls >= 5.26 (Nicolas R).
