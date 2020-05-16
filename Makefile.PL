@@ -29,6 +29,7 @@ resources(
 contributors 'Tom Doran <bobtfish@cpan.org>';
 contributors 'Nicolas R <atoomic@cpan.org>';
 contributors 'Dave Lambley <dlambley@cpan.org>';
+contributors 'Ruslan Zakirov <ruz@bestpractical.com>'
 
 WriteAll;
 
