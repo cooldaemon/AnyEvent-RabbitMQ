@@ -30,7 +30,7 @@ contributors 'Tom Doran <bobtfish@cpan.org>';
 contributors 'Nicolas R <atoomic@cpan.org>';
 contributors 'Dave Lambley <dlambley@cpan.org>';
 contributors 'Ruslan Zakirov <ruz@bestpractical.com>';
-contributors 'cooldaemon <cooldaemon@gmail.com>';
+contributors 'Masahito Ikuta <cooldaemon@gmail.com>';
 
 WriteAll;
 
