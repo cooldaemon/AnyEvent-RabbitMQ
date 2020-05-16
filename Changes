@@ -1,5 +1,7 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Minor test fixes
+
 1.19  Sat Mar 21 16:49:24 GMT 2015
         - Add 'no_ack' as an optional argument to the ->consume method
           (Dave Mueller).
