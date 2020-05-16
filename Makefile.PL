@@ -1,3 +1,5 @@
+BEGIN { unshift @INC, '.' }
+
 use inc::Module::Install;
 
 name 'AnyEvent-RabbitMQ';
