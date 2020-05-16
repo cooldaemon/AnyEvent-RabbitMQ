@@ -26,5 +26,9 @@ resources(
     repository => 'git://github.com/bobtfish/AnyEvent-RabbitMQ.git',
 );
 
+contributors 'Tom Doran <bobtfish@cpan.org>';
+contributors 'Nicolas R <atoomic@cpan.org>';
+contributors 'Dave Lambley <dlambley@cpan.org>';
+
 WriteAll;
 

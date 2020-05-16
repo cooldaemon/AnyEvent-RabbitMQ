@@ -20,7 +20,7 @@ jobs:
         with:
           perl-version: ${{ matrix.perl }}
       - run: perl -V
-      - run: cpanm --quiet --notest Module::Install Module::Install::AuthorTests Module::Install::AuthorRequires Test::Pod Test::Spelling Test::Perl::Critic
+      - run: cpanm --quiet --notest Module::Install Module::Install::AuthorTests Module::Install::AuthorRequires Module::Install::Contributors Test::Pod Test::Spelling Test::Perl::Critic
       - run: perl Makefile.PL
       - run: cpanm --quiet --notest --installdeps .
       - run: make

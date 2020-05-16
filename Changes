@@ -1,5 +1,6 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Fix @INC breaking perls >= 5.26 (Nicolas R).
         - Minor test fixes
 
 1.19  Sat Mar 21 16:49:24 GMT 2015
