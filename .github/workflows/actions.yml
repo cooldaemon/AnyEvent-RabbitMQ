@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         os: ['ubuntu-latest']
-        perl: [ '5.32', '5.30', '5.28', '5.10' ]
+        perl: [ '5.30', '5.28', '5.10' ]
       max-parallel: 2
     name: Perl ${{ matrix.perl }} on ${{ matrix.os }}
 
