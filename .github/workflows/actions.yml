@@ -76,6 +76,7 @@ jobs:
       - run: perl -V
       - run: cpanm --quiet --notest Module::Install Module::Install::AuthorTests Module::Install::AuthorRequires Module::Install::Contributors
       - run: perl Makefile.PL
+      - run: make manifest
       - run: make tardist
       - uses: actions/upload-artifact@v2
         with:
