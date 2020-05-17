@@ -7,7 +7,7 @@ use AnyEvent::RabbitMQ::LocalQueue;
 use AnyEvent;
 use Scalar::Util qw( looks_like_number weaken );
 use Devel::GlobalDestruction;
-use Carp qw(croak);
+use Carp qw(croak cluck);
 use POSIX qw(ceil);
 BEGIN { *Dumper = \&AnyEvent::RabbitMQ::Dumper }
 
@@ -431,7 +431,7 @@ sub publish {
     defined($header_args) or $header_args = {};
     defined($body) or $body = '';
     if ( defined($ack_cb) or defined($nack_cb) or defined($return_cb) ) {
-        croak "Can't set on_ack/on_nack/on_return callback when not in confirm mode"
+        cluck "Can't set on_ack/on_nack/on_return callback when not in confirm mode"
             unless $self->{_is_confirm};
     }
 

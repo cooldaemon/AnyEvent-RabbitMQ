@@ -5,14 +5,24 @@ on:
     tags:
     - '*'
 jobs:
-  build:
+  integration-test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['ubuntu-latest', 'macos-latest']
+        os: ['ubuntu-latest']
         perl: [ '5.30', '5.28', '5.10' ]
       max-parallel: 2
-    name: Perl ${{ matrix.perl }} on ${{ matrix.os }}
+    name: Integration test ${{ matrix.perl }} on ${{ matrix.os }}
+
+    services:
+      rabbitmq:
+        image: rabbitmq:latest
+        env:
+          RABBITMQ_DEFAULT_VHOST: "/"
+        ports:
+          - 5672:5672/tcp
+        options: --health-cmd "rabbitmqctl node_health_check" --health-interval 10s --health-timeout 5s --health-retries 5
+
     steps:
       - uses: actions/checkout@v2
       - name: Set up perl
@@ -26,3 +36,48 @@ jobs:
       - run: make
       - run: make test
       - run: prove -Iblib/lib -r xt/
+  unit-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ['ubuntu-latest', 'macos-latest']
+        perl: [ '5.30', '5.28', '5.10' ]
+      max-parallel: 2
+    name: Perl unit tests ${{ matrix.perl }} on ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up perl
+        uses: shogo82148/actions-setup-perl@v1.3.1
+        with:
+          perl-version: ${{ matrix.perl }}
+      - run: perl -V
+      - run: cpanm --quiet --notest Module::Install Module::Install::AuthorTests Module::Install::AuthorRequires Module::Install::Contributors
+      - run: perl Makefile.PL
+      - run: cpanm --quiet --notest --installdeps .
+      - run: make
+      - run: make test
+
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ['ubuntu-latest']
+        perl: [ '5.30' ]
+      max-parallel: 2
+    name: CPAN build ${{ matrix.perl }} on ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up perl
+        uses: shogo82148/actions-setup-perl@v1.3.1
+        with:
+          perl-version: ${{ matrix.perl }}
+      - run: perl -V
+      - run: cpanm --quiet --notest Module::Install Module::Install::AuthorTests Module::Install::AuthorRequires Module::Install::Contributors
+      - run: perl Makefile.PL
+      - run: make manifest
+      - run: make tardist
+      - uses: actions/upload-artifact@v2
+        with:
+          path: AnyEvent-RabbitMQ-*.tar.gz
