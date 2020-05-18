@@ -35,6 +35,7 @@ contributors 'Dave Lambley <dlambley@cpan.org>';
 contributors 'Ruslan Zakirov <ruz@bestpractical.com>';
 contributors 'Masahito Ikuta <cooldaemon@gmail.com>';
 contributors 'Rod Taylor <rod.taylor@gmail.com>';
+contributors "Carl H\xf6rberg <carl\@cloudamqp.com>";
 
 WriteAll;
 

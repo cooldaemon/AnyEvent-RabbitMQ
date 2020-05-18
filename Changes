@@ -1,5 +1,7 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Prevent channelMax from overflowing.
+          https://rt.cpan.org/Ticket/Display.html?id=97716 (Carl Hörberg)
         - Merge in documentation patch from
           https://rt.cpan.org/Ticket/Display.html?id=88213 (Rod Taylor)
 
