@@ -85,7 +85,7 @@ jobs:
         with:
           perl-version: ${{ matrix.perl }}
       - run: perl -V
-      - run: cpanm --quiet --notest Module::Install Module::Install::AuthorTests Module::Install::AuthorRequires Module::Install::Contributors
+      - run: cpanm --quiet --notest Module::Install Module::Install::AuthorTests Module::Install::AuthorRequires Module::Install::Contributors Module::Install::AutoLicense
       - run: perl Makefile.PL
       - run: make manifest
       - run: make tardist

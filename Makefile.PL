@@ -26,11 +26,15 @@ resources(
     repository => 'git://github.com/bobtfish/AnyEvent-RabbitMQ.git',
 );
 
+license 'perl';
+auto_license;
+
 contributors 'Tom Doran <bobtfish@cpan.org>';
 contributors 'Nicolas R <atoomic@cpan.org>';
 contributors 'Dave Lambley <dlambley@cpan.org>';
 contributors 'Ruslan Zakirov <ruz@bestpractical.com>';
 contributors 'Masahito Ikuta <cooldaemon@gmail.com>';
+contributors 'Rod Taylor <rod.taylor@gmail.com>';
 
 WriteAll;
 

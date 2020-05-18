@@ -1110,7 +1110,24 @@ The routing key to bind with
 
 =head2 declare_queue
 
-Declare a queue, that is, create it if it doesn't exist yet.
+Declare a queue (create it if it doesn't exist yet) for publishing messages
+to on the server.
+
+  my $done    = AnyEvent->condvar;
+  $channel->declare_queue(
+     exchange    => $queue_exchange,
+     queue       => $queueName,
+     durable     => 0,
+     auto_delete => 1,
+     passive     => 0,
+     arguments   => { 'x-expires' => 0, },
+     on_success  => sub { $done->send; },
+     on_failure  => sub {
+         say "Unable to create queue $queueName";
+         $done->send;
+     },
+  );
+  $done->recv;
 
 Arguments:
 
@@ -1160,6 +1177,25 @@ Callback that is called when the declaration of the queue has failed.
 =item ticket
 
 default 0
+
+=for comment
+XXX Is "exchange" a valid parameter?
+
+=item arguments
+
+C<arguments> is a hashref of additional parameters which RabbitMQ extensions
+may use. This list is not complete and your RabbitMQ server configuration will
+determine which arguments are valid and how they act.
+
+=over
+
+=item x-expires
+
+The queue will automatically be removed after being idle for this many milliseconds.
+
+Default of 0 disables automatic queue removal.
+
+=back
 
 =back
 
