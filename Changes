@@ -1,5 +1,8 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Merge in documentation patch from
+          https://rt.cpan.org/Ticket/Display.html?id=88213 (Rod Taylor)
+
 1.20  Sun 17 May 14:22:17 BST 2020
         - Downgrade error to a warning.
 
