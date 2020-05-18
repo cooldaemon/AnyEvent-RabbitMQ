@@ -4,6 +4,13 @@ on:
     - '*'
     tags:
     - '*'
+  pull_request:
+    branches:
+      - master
+    types:
+      - opened
+      - reopened
+
 jobs:
   integration-test:
     needs: build
