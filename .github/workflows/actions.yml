@@ -43,7 +43,7 @@ jobs:
         with:
           perl-version: ${{ matrix.perl }}
       - run: perl -V
-      - run: cpanm --quiet --notest --installdeps --with-recommends .
+      - run: cpanm --quiet --notest --installdeps --with-recommends --with-develop .
       - run: perl Makefile.PL
       - run: make
       - run: AUTHOR_TESTING=1 make test
