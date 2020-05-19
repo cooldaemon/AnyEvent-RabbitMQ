@@ -46,7 +46,7 @@ jobs:
       - run: cpanm --quiet --notest --installdeps --with-recommends .
       - run: perl Makefile.PL
       - run: make
-      - run: make test
+      - run: AUTHOR_TESTING=1 make test
       - run: prove -Iblib/lib -r xt/
   unit-test:
     needs: build
