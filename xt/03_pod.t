@@ -1,5 +1,5 @@
-# XXX should be replaced by Dist::Zilla::Plugin::PodSyntaxTests, but holding
-# of for eas of development on Ubuntu 18.04.
+# TODO should be replaced by Dist::Zilla::Plugin::PodSyntaxTests, but holding
+# off for ease of development on Ubuntu 18.04.
 
 use Test::More;
 eval "use Test::Pod 1.00";
