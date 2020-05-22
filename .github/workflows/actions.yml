@@ -1,15 +1,4 @@
-on:
-  push:
-    branches:
-    - '*'
-    tags:
-    - '*'
-  pull_request:
-    branches:
-      - master
-    types:
-      - opened
-      - reopened
+on: [push, pull_request]
 
 jobs:
   integration-test:
