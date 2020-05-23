@@ -1,15 +1,4 @@
-on:
-  push:
-    branches:
-    - '*'
-    tags:
-    - '*'
-  pull_request:
-    branches:
-      - master
-    types:
-      - opened
-      - reopened
+on: [push, pull_request]
 
 jobs:
   integration-test:
@@ -43,11 +32,10 @@ jobs:
         with:
           perl-version: ${{ matrix.perl }}
       - run: perl -V
-      - run: cpanm --quiet --notest --installdeps .
-      - run: cpanm --quiet --notest Test::Pod Test::Spelling Test::Perl::Critic
+      - run: cpanm --quiet --notest --installdeps --with-recommends --with-develop .
       - run: perl Makefile.PL
       - run: make
-      - run: make test
+      - run: AUTHOR_TESTING=1 make test
       - run: prove -Iblib/lib -r xt/
   unit-test:
     needs: build
@@ -92,10 +80,9 @@ jobs:
         with:
           perl-version: ${{ matrix.perl }}
       - run: perl -V
-      - run: cpanm --quiet --notest Module::Install Module::Install::AuthorTests Module::Install::AuthorRequires Module::Install::Contributors Module::Install::AutoLicense
-      - run: perl Makefile.PL
-      - run: make manifest
-      - run: make tardist
+      - run: cpanm --quiet --notest Dist::Zilla
+      - run: dzil authordeps | cpanm --quiet
+      - run: dzil build
       - uses: actions/upload-artifact@v2
         with:
           path: AnyEvent-RabbitMQ-*.tar.gz
