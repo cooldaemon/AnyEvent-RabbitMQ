@@ -1,5 +1,6 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Add "no_ack" flag to "get" method. (Julio Polo)
         - Prevent channelMax from overflowing.
           https://rt.cpan.org/Ticket/Display.html?id=97716 (Carl Hörberg)
         - Merge in documentation patch from

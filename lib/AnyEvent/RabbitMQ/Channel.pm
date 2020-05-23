@@ -617,12 +617,14 @@ sub get {
     my $self = shift;
     my ($cb, $failure_cb, %args) = $self->_delete_cbs(@_);
 
+    my $no_ack = delete $args{no_ack} // 1;
+
     return $self if !$self->_check_open($failure_cb);
 
     $self->{connection}->_push_write_and_read(
         'Basic::Get',
         {
-            no_ack => 1,
+            no_ack => $no_ack,
             %args, # queue
             ticket => 0,
         },
@@ -1384,6 +1386,10 @@ a notification that there was nothing to collect from the queue.
 =item on_failure
 
 This callback will be called if an error is signalled on this channel.
+
+=item no_ack
+
+0 or 1, default 1
 
 =back
 
