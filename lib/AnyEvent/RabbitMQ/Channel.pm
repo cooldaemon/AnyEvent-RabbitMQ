@@ -11,6 +11,8 @@ use Carp qw(croak cluck);
 use POSIX qw(ceil);
 BEGIN { *Dumper = \&AnyEvent::RabbitMQ::Dumper }
 
+# VERSION
+
 use namespace::clean;
 
 use constant {
