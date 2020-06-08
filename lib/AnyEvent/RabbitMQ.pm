@@ -172,6 +172,7 @@ sub connect {
                 },
                 $args{tls} ? (tls => 'connect') : (),
                 $args{tls_ctx} ? ( tls_ctx => $args{tls_ctx} ) : (),
+                $args{nodelay} ? ( nodelay => $args{nodelay} ) : (),
             );
             $self->_read_loop($args{on_close}, $args{on_read_failure});
             $self->_start(%args,);
@@ -689,6 +690,7 @@ AnyEvent::RabbitMQ - An asynchronous and multi channel Perl AMQP client.
       tls        => 0, # Or 1 if you'd like SSL
       tls_ctx    => $anyevent_tls # or a hash of AnyEvent::TLS options.
       tune       => { heartbeat => 30, channel_max => $whatever, frame_max = $whatever },
+      nodelay    => 1, # Reduces latency by disabling Nagle's algorithm
       on_success => sub {
           my $ar = shift;
           $ar->open_channel(
