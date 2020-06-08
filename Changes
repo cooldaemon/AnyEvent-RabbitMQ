@@ -1,5 +1,7 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Assign a version number to all modules in package.
+
 1.21 Sat 30 May 23:40:54 BST 2020
         - No changes.
 
