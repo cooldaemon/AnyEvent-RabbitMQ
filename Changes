@@ -1,5 +1,6 @@
 Revision history for Perl extension AnyEvent::RabbitMQ
 
+        - Validate peer when using TLS. (Scott O'Neil)
         - Add "nodelay" option to disable Nagle's algorithm.
           https://rt.cpan.org/Ticket/Display.html?id=119793
           Also José Micó's e888205306fb49167c0dc9aa4e4dc940cc922d25.
