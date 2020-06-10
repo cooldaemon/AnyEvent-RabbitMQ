@@ -43,7 +43,7 @@ lives_ok sub {
     $ar->load_xml_spec()
 }, 'load xml spec';
 
-my @nagle = [[], [nodelay => 0], [nodelay => 1]];
+my @nagle = ([], [nodelay => 0], [nodelay => 1]);
 
 for my $opt (@nagle) {
     my $done = AnyEvent->condvar;
