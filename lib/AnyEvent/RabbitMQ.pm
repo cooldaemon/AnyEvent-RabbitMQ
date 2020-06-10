@@ -32,7 +32,7 @@ use AnyEvent::RabbitMQ::LocalQueue;
 
 use namespace::clean;
 
-our $VERSION = '1.21';
+# VERSION
 
 use constant {
     _ST_CLOSED => 0,
@@ -170,6 +170,7 @@ sub connect {
                     $self->{drain_condvar}->send
                         if exists $self->{drain_condvar};
                 },
+                peername => $args{host},
                 $args{tls} ? (tls => 'connect') : (),
                 $args{tls_ctx} ? ( tls_ctx => $args{tls_ctx} ) : (),
                 $args{nodelay} ? ( nodelay => $args{nodelay} ) : (),
