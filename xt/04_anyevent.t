@@ -1,6 +1,7 @@
 use Test::More;
 use Test::Exception;
 use Data::Dumper;
+use version 0.77;
 
 use FindBin;
 
