@@ -170,6 +170,7 @@ sub connect {
                     $self->{drain_condvar}->send
                         if exists $self->{drain_condvar};
                 },
+                peername => $args{host},
                 $args{tls} ? (tls => 'connect') : (),
                 $args{tls_ctx} ? ( tls_ctx => $args{tls_ctx} ) : (),
             );
