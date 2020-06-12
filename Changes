@@ -2,6 +2,7 @@ Revision history for Perl extension AnyEvent::RabbitMQ
 
 1.22  Fri 12 Jun 19:55:03 BST 2020
         - Minor correction to author tests.
+        - Correct version constraint on version.pm.
 
 1.21_01  Wed 10 Jun 12:23:48 BST 2020
         - Validate peer when using TLS. (Scott O'Neil)
