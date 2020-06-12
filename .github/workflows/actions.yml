@@ -25,10 +25,10 @@ jobs:
         uses: actions/download-artifact@v1
         with:
           name: release-tarball
-      - run: tar xzf release-tarball/AnyEvent-RabbitMQ-*.tar.gz --strip 1
+      - run: tar xzf release-tarball/ar.tar.gz --strip 1
       - run: rm -rf release-tarball
       - name: Set up perl
-        uses: shogo82148/actions-setup-perl@v1.3.1
+        uses: shogo82148/actions-setup-perl@v1.4.0
         with:
           perl-version: ${{ matrix.perl }}
       - run: perl -V
@@ -44,7 +44,7 @@ jobs:
       matrix:
         os: ['ubuntu-latest', 'macos-latest']
         perl: [ '5.30', '5.28', '5.10' ]
-      max-parallel: 2
+      max-parallel: 3
     name: Perl unit tests ${{ matrix.perl }} on ${{ matrix.os }}
 
     steps:
@@ -52,12 +52,36 @@ jobs:
         uses: actions/download-artifact@v1
         with:
           name: release-tarball
-      - run: tar xzf release-tarball/AnyEvent-RabbitMQ-*.tar.gz --strip 1
-      - run: rm -rf release-tarball
+      - run: tar xzf release-tarball/ar.tar.gz --strip 1
       - name: Set up perl
-        uses: shogo82148/actions-setup-perl@v1.3.1
+        uses: shogo82148/actions-setup-perl@v1.4.0
         with:
           perl-version: ${{ matrix.perl }}
+      - run: perl -V
+      - run: cpanm --quiet --notest --installdeps .
+      - run: perl Makefile.PL
+      - run: make
+      - run: make test
+
+  strawberry-unit-test:
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ['windows-latest']
+        perl: [ '5.30.2.1', '5.28.2.1' ]
+        arch: ['64bit']
+      max-parallel: 3
+    name: Strawberry Perl unit tests on ${{ matrix.os }} with ${{ matrix.arch }} perl ${{ matrix.perl }}
+
+    steps:
+      - name: Grab release tarball
+        uses: actions/download-artifact@v1
+        with:
+          name: release-tarball
+      - run: tar xzf release-tarball/ar.tar.gz --strip 1
+      - run: Invoke-WebRequest -Uri http://strawberryperl.com/download/${{ matrix.perl }}/strawberry-perl-${{ matrix.perl }}-${{ matrix.arch }}.msi -OutFile c:\strawberry-perl-${{ matrix.perl }}-${{ matrix.arch }}.msi
+      - run: Start-Process msiexec.exe -Wait -ArgumentList '/I C:\strawberry-perl-${{ matrix.perl }}-${{ matrix.arch }}.msi /quiet'
       - run: perl -V
       - run: cpanm --quiet --notest --installdeps .
       - run: perl Makefile.PL
@@ -76,14 +100,15 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Set up perl
-        uses: shogo82148/actions-setup-perl@v1.3.1
+        uses: shogo82148/actions-setup-perl@v1.4.0
         with:
           perl-version: ${{ matrix.perl }}
       - run: perl -V
       - run: cpanm --quiet --notest Dist::Zilla
       - run: dzil authordeps | cpanm --quiet --notest
       - run: dzil build
+      - run: mv AnyEvent-RabbitMQ-*.tar.gz ar.tar.gz
       - uses: actions/upload-artifact@v2
         with:
-          path: AnyEvent-RabbitMQ-*.tar.gz
+          path: ar.tar.gz
           name: release-tarball
