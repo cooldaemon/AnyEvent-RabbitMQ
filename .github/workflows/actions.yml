@@ -28,7 +28,7 @@ jobs:
       - run: tar xzf release-tarball/ar.tar.gz --strip 1
       - run: rm -rf release-tarball
       - name: Set up perl
-        uses: shogo82148/actions-setup-perl@v1.4.0
+        uses: shogo82148/actions-setup-perl@v1.15.3
         with:
           perl-version: ${{ matrix.perl }}
       - run: perl -V
@@ -54,7 +54,7 @@ jobs:
           name: release-tarball
       - run: tar xzf release-tarball/ar.tar.gz --strip 1
       - name: Set up perl
-        uses: shogo82148/actions-setup-perl@v1.4.0
+        uses: shogo82148/actions-setup-perl@v1.15.3
         with:
           perl-version: ${{ matrix.perl }}
       - run: perl -V
@@ -100,7 +100,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Set up perl
-        uses: shogo82148/actions-setup-perl@v1.4.0
+        uses: shogo82148/actions-setup-perl@v1.15.3
         with:
           perl-version: ${{ matrix.perl }}
       - run: perl -V
