@@ -689,8 +689,8 @@ AnyEvent::RabbitMQ - An asynchronous and multi channel Perl AMQP client.
       vhost      => '/',
       timeout    => 1,
       tls        => 0, # Or 1 if you'd like SSL
-      tls_ctx    => $anyevent_tls # or a hash of AnyEvent::TLS options.
-      tune       => { heartbeat => 30, channel_max => $whatever, frame_max = $whatever },
+      tls_ctx    => $anyevent_tls, # or a hash of AnyEvent::TLS options.
+      tune       => { heartbeat => 30, channel_max => $whatever, frame_max => $whatever },
       nodelay    => 1, # Reduces latency by disabling Nagle's algorithm
       on_success => sub {
           my $ar = shift;
