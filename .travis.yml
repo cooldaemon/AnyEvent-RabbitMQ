@@ -1,0 +1,20 @@
+language: perl
+
+perl:
+  - "5.16"
+
+services:
+  - rabbitmq
+
+before_install:
+  - sudo apt-get update -qq
+  - sudo apt-get install -y aspell
+
+install:
+  - cpanm --quiet --notest AnyEvent
+  - cpanm --quiet --notest Devel::GlobalDestruction
+  - cpanm --quiet --notest Module::Install::AuthorTests
+  - cpanm --quiet --notest Net::AMQP
+  - cpanm --quiet --notest Readonly
+  - cpanm --quiet --notest Test::Perl::Critic
+  - cpanm --quiet --notest Test::Spelling

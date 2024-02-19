@@ -3,6 +3,8 @@ package AnyEvent::RabbitMQ::LocalQueue;
 use strict;
 use warnings;
 
+# VERSION
+
 sub new {
     my $class = shift;
     return bless {
@@ -41,6 +43,17 @@ sub _drain_queue {
     }
 
     return $self;
+}
+
+sub _flush {
+    my ($self, $frame) = @_;
+
+    $self->_drain_queue;
+
+    while (my $cb = shift @{$self->{_drain_code_queue}}) {
+        local $@; # Flush frames immediately, throwing away errors for on-close
+        eval { $cb->($frame) };
+    }
 }
 
 1;
